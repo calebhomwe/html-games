@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Block Blast</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(1200px 800px at 50% -10%, #1e1b4b 0%, #0f0f23 45%, #07070f 100%);
+  min-height: 100vh; color: #e5e7eb; display: flex; flex-direction: column; align-items: center;
+  padding: 16px 8px 24px; overflow-x: hidden; user-select: none; touch-action: manipulation;
+}
+h1 {
+  font-size: clamp(1.6rem, 5vw, 2.2rem); font-weight: 900; letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #f472b6, #fb923c, #facc15, #4ade80, #38bdf8, #a78bfa);
+  -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 4px;
+}
+.subtitle { color: #64748b; font-size: 0.8rem; margin-bottom: 8px; }
+
+#gameWrap { position: relative; width: min(92vw, 480px); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+#scoreBoard { display: flex; gap: 20px; justify-content: center; width: 100%; }
+.scoreBox { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 8px 16px; text-align: center; min-width: 70px; }
+.scoreBox .label { font-size: 0.65rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+.scoreBox .value { font-size: 1.4rem; font-weight: 900; color: #e5e7eb; }
+.scoreBox .value.combo { color: #facc15; }
+
+#gridCanvas { display: block; border-radius: 12px; box-shadow: 0 0 0 2px rgba(167,139,250,0.3), 0 8px 32px rgba(0,0,0,0.5), 0 0 60px rgba(167,139,250,0.15); touch-action: none; }
+
+#piecesArea { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.pieceSlot { width: 90px; height: 90px; border-radius: 12px; border: 2px dashed rgba(255,255,255,0.15); background: rgba(255,255,255,0.03); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; position: relative; }
+.pieceSlot:hover { border-color: rgba(167,139,250,0.5); box-shadow: 0 0 16px rgba(167,139,250,0.2); }
+.pieceSlot.selected { border-color: #facc15; border-style: solid; box-shadow: 0 0 20px rgba(250,204,21,0.4); background: rgba(250,204,21,0.08); }
+.pieceSlot.used { opacity: 0.2; pointer-events: none; }
+.pieceSlot canvas { display: block; }
+
+#status { font-size: 0.85rem; font-weight: 700; text-align: center; color: #cbd5e1; min-height: 20px; }
+#comboText { font-size: 0.75rem; font-weight: 700; color: #facc15; min-height: 18px; text-align: center; }
+
+.btn {
+  padding: 8px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15);
+  background: linear-gradient(160deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03));
+  color: #e5e7eb; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap; font-family: inherit;
+}
+.btn:hover { border-color: rgba(167,139,250,0.5); box-shadow: 0 0 14px rgba(167,139,250,0.2); }
+.btn:active { transform: scale(0.94); }
+
+#controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+.back { margin-top: 12px; color: #64748b; text-decoration: none; font-size: 0.8rem; font-weight: 700; }
+.back:hover { color: #a78bfa; }
+
+body.shake { animation: bodyShake 0.3s ease-out; }
+@keyframes bodyShake {
+  0%,100%{transform:translate(0)} 10%{transform:translate(-3px,2px)} 30%{transform:translate(3px,-2px)} 50%{transform:translate(-2px,-1px)} 70%{transform:translate(2px,1px)} 90%{transform:translate(-1px,0)}
+}
+</style>
+</head>
+<body>
+<h1>🧊 BLOCK BLAST</h1>
+<p class="subtitle">Place blocks, clear lines, blast combos</p>
+
+<div id="gameWrap">
+  <div id="scoreBoard">
+    <div class="scoreBox"><div class="label">Score</div><div class="value" id="scoreVal">0</div></div>
+    <div class="scoreBox"><div class="label">Best</div><div class="value" id="bestVal">0</div></div>
+    <div class="scoreBox"><div class="label">Combo</div><div class="value combo" id="comboVal">0</div></div>
+  </div>
+  <canvas id="gridCanvas"></canvas>
+  <div id="comboText"></div>
+  <div id="piecesArea"></div>
+  <div id="status">Select a block, then tap the grid</div>
+  <div id="controls">
+    <button class="btn" id="btnUndo">↩ Undo</button>
+    <button class="btn" id="btnReset">🔄 New Game</button>
+  </div>
+</div>
+
+<a class="back" href="../index.html">← Back to Arcade Hub</a>
+
+<script>
+// ==================== POLYFILL ====================
+
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (typeof r === 'number') r = [r, r, r, r];
+    else if (!Array.isArray(r)) r = [0,0,0,0];
+    this.beginPath();
+    this.moveTo(x + r[0], y);
+    this.lineTo(x + w - r[1], y);
+    this.quadraticCurveTo(x + w, y, x + w, y + r[1]);
+    this.lineTo(x + w, y + h - r[2]);
+    this.quadraticCurveTo(x + w, y + h, x + w - r[2], y + h);
+    this.lineTo(x + r[3], y + h);
+    this.quadraticCurveTo(x, y + h, x, y + h - r[3]);
+    this.lineTo(x, y + r[0]);
+    this.quadraticCurveTo(x, y, x + r[0], y);
+    this.closePath();
+    return this;
+  };
+}
+
+// ==================== SOUND ENGINE ====================
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function resumeAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); }
+document.addEventListener('click', resumeAudio, {once:true});
+document.addEventListener('touchstart', resumeAudio, {once:true});
+
+function playTone(freq, duration, type, vol, ramp) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  if (ramp) osc.frequency.linearRampToValueAtTime(freq * ramp, audioCtx.currentTime + duration);
+  gain.gain.setValueAtTime(vol || 0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + duration);
+}
+
+function playNoise(duration, vol) {
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+  const src = audioCtx.createBufferSource();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass'; filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+  src.buffer = buf;
+  gain.gain.setValueAtTime(vol || 0.1, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  src.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+  src.start();
+}
+
+function sfxPlace() { playTone(200, 0.1, 'triangle', 0.12); playNoise(0.06, 0.06); }
+function sfxClear() { playTone(520, 0.15, 'square', 0.1); playTone(660, 0.12, 'square', 0.08); setTimeout(() => playTone(780, 0.1, 'square', 0.06), 80); }
+function sfxCombo(n) { const f = 400 + n * 80; playTone(f, 0.2, 'square', 0.1); setTimeout(() => playTone(f*1.25, 0.2, 'square', 0.1), 100); setTimeout(() => playTone(f*1.5, 0.25, 'square', 0.12), 200); }
+function sfxGameOver() { playTone(300, 0.3, 'sawtooth', 0.1, 0.3); setTimeout(() => playTone(200, 0.3, 'sawtooth', 0.1, 0.3), 200); setTimeout(() => playTone(100, 0.5, 'sawtooth', 0.12, 0.3), 400); }
+function sfxSelect() { playTone(600, 0.05, 'sine', 0.08); }
+function sfxUndo() { playTone(400, 0.08, 'sine', 0.06); playTone(300, 0.08, 'sine', 0.06); }
+// ==================== BLOCK SHAPES ====================
+
+const SHAPES = [
+  [[1]],                                          // 1x1
+  [[1,1]],                                        // 1x2
+  [[1],[1]],                                      // 2x1
+  [[1,1,1]],                                      // 1x3
+  [[1],[1],[1]],                                  // 3x1
+  [[1,1],[1,1]],                                  // 2x2
+  [[1,1,1],[0,1,0]],                              // T
+  [[1,0],[1,0],[1,1]],                            // L
+  [[0,1],[0,1],[1,1]],                            // J
+  [[1,1,0],[0,1,1]],                              // S
+  [[0,1,1],[1,1,0]],                              // Z
+  [[1,1,1,1]],                                    // 1x4
+  [[1],[1],[1],[1]],                              // 4x1
+  [[1,1,1],[1,0,0]],                              // big L
+  [[1,1,1],[0,0,1]],                              // big J
+  [[1,0],[1,1],[1,0]],                            // plus
+  [[1,1],[1,0],[1,0]],                            // short L
+  [[1,1],[0,1],[0,1]],                            // short J
+  [[1,1,1],[0,1,0],[0,1,0]],                      // long T
+  [[1,0,0],[1,1,1],[0,0,1]],                      // zigzag big
+];
+
+const COLORS = ['#f472b6','#fb923c','#facc15','#4ade80','#38bdf8','#a78bfa','#f87171','#c084fc','#fb7185','#34d399','#60a5fa','#e879f9'];
+
+// ==================== GAME STATE ====================
+
+const GRID = 8;
+let grid = [];
+let pieces = [];
+let selectedPiece = -1;
+let score = 0;
+let bestScore = parseInt(localStorage.getItem('blockblast_best') || '0');
+let comboCount = 0;
+let moveHistory = [];
+let gameOver = false;
+let clearingCells = [];
+let clearAnim = 0;
+let particles = [];
+let shakeAmount = 0;
+let animFrame = null;
+
+// ==================== CANVAS ====================
+
+const canvas = document.getElementById('gridCanvas');
+const ctx = canvas.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+let cellSize = 0, gridPadding = 0;
+let hoverCell = null;
+
+function resizeGrid() {
+  const maxWidth = Math.min(document.getElementById('gameWrap').clientWidth - 16, 440);
+  const size = Math.floor(maxWidth * dpr);
+  canvas.width = size; canvas.height = size;
+  cellSize = Math.floor(size / GRID);
+  gridPadding = Math.floor((size - cellSize * GRID) / 2);
+}
+resizeGrid();
+window.addEventListener('resize', () => { resizeGrid(); drawGrid(); drawPieces(); });
+
+// ==================== GAME LOGIC ====================
+
+function initGrid() {
+  grid = new Array(GRID * GRID).fill(0);
+  pieces = generatePieces();
+  selectedPiece = -1;
+  score = 0;
+  comboCount = 0;
+  moveHistory = [];
+  gameOver = false;
+  clearingCells = [];
+  clearAnim = 0;
+  particles = [];
+  shakeAmount = 0;
+  hoverCell = null;
+  updateUI();
+  drawGrid();
+  drawPieces();
+}
+
+function generatePieces() {
+  const p = [];
+  for (let i = 0; i < 3; i++) {
+    const shapeIdx = Math.floor(Math.random() * SHAPES.length);
+    const colorIdx = Math.floor(Math.random() * COLORS.length);
+    p.push({ shape: SHAPES[shapeIdx].map(r => [...r]), color: COLORS[colorIdx], used: false });
+  }
+  return p;
+}
+
+function canPlace(grid, shape, row, col) {
+  const h = shape.length, w = shape[0].length;
+  if (row + h > GRID || col + w > GRID) return false;
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      if (shape[r][c] && grid[(row + r) * GRID + (col + c)]) return false;
+    }
+  }
+  return true;
+}
+
+function placePiece(grid, shape, colorIdx, row, col) {
+  const h = shape.length, w = shape[0].length;
+  const newGrid = grid.slice();
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      if (shape[r][c]) newGrid[(row + r) * GRID + (col + c)] = colorIdx + 1;
+    }
+  }
+  return newGrid;
+}
+
+function findFullLines(grid) {
+  const fullRows = [];
+  const fullCols = [];
+  for (let r = 0; r < GRID; r++) {
+    let full = true;
+    for (let c = 0; c < GRID; c++) { if (!grid[r * GRID + c]) { full = false; break; } }
+    if (full) fullRows.push(r);
+  }
+  for (let c = 0; c < GRID; c++) {
+    let full = true;
+    for (let r = 0; r < GRID; r++) { if (!grid[r * GRID + c]) { full = false; break; } }
+    if (full) fullCols.push(c);
+  }
+  return { rows: fullRows, cols: fullCols };
+}
+
+function clearLines(grid, rows, cols) {
+  const newGrid = grid.slice();
+  for (const r of rows) for (let c = 0; c < GRID; c++) newGrid[r * GRID + c] = 0;
+  for (const c of cols) for (let r = 0; r < GRID; r++) newGrid[r * GRID + c] = 0;
+  return newGrid;
+}
+
+function hasAnyMoves(grid, pieces) {
+  for (const piece of pieces) {
+    if (piece.used) continue;
+    for (let r = 0; r < GRID; r++) {
+      for (let c = 0; c < GRID; c++) {
+        if (canPlace(grid, piece.shape, r, c)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function placePieceAt(pieceIdx, row, col) {
+  if (gameOver || pieceIdx < 0 || pieceIdx >= pieces.length) return;
+  if (pieces[pieceIdx].used) return;
+  if (!canPlace(grid, pieces[pieceIdx].shape, row, col)) return;
+
+  moveHistory.push({ grid: grid.slice(), pieces: pieces.map(p => ({...p, shape: p.shape.map(r=>[...r])})), score, comboCount });
+
+  const colorIdx = COLORS.indexOf(pieces[pieceIdx].color);
+  grid = placePiece(grid, pieces[pieceIdx].shape, colorIdx, row, col);
+  pieces[pieceIdx].used = true;
+
+  const { rows, cols } = findFullLines(grid);
+  const linesCleared = rows.length + cols.length;
+
+if (linesCleared > 0) {
+    comboCount++;
+    const points = linesCleared * 10 * comboCount;
+    score += points;
+    if (linesCleared >= 3) score += 20;
+
+    if (linesCleared >= 4) sfxCombo(linesCleared);
+    else if (comboCount >= 3) sfxCombo(comboCount);
+    else sfxClear();
+
+    clearingCells = [];
+    for (const r of rows) for (let c = 0; c < GRID; c++) clearingCells.push(r * GRID + c);
+    for (const c of cols) for (let r = 0; r < GRID; r++) clearingCells.push(r * GRID + c);
+    clearAnim = 1.0;
+
+    // Particle burst on cleared cells
+    for (const cellIdx of clearingCells) {
+      const cr = Math.floor(cellIdx / GRID), cc = cellIdx % GRID;
+      const px = gridPadding + cc * cellSize + cellSize / 2;
+      const py = gridPadding + cr * cellSize + cellSize / 2;
+      const pColor = COLORS[(grid[cellIdx] || 1) - 1] || '#facc15';
+      for (let i = 0; i < 8; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 4;
+        particles.push({ x: px, y: py, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed - 2, size: 3 + Math.random()*4, life: 0.5 + Math.random()*0.5, color: pColor });
+      }
+    }
+    if (particles.length > 500) particles.splice(0, particles.length - 500);
+
+    // Screen shake
+    shakeAmount = Math.max(shakeAmount, 0.5 + linesCleared * 0.5);
+    if (linesCleared >= 4 || comboCount >= 3) {
+      document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
+    }
+
+    grid = clearLines(grid, rows, cols);
+
+    if (linesCleared >= 4) {
+      document.getElementById('comboText').textContent = `🔥 ${linesCleared}x CLEAR! +${points}`;
+    } else if (comboCount >= 3) {
+      document.getElementById('comboText').textContent = `✨ ${comboCount}x COMBO! +${points}`;
+    } else {
+      document.getElementById('comboText').textContent = `+${points}`;
+    }
+    setTimeout(() => { document.getElementById('comboText').textContent = ''; }, 1500);
+  } else {
+    comboCount = 0;
+    score += pieces[pieceIdx].shape.flat().filter(Boolean).length;
+    sfxPlace();
+  }
+
+  selectedPiece = -1;
+  hoverCell = null;
+
+  // Check if all pieces used
+  const allUsed = pieces.every(p => p.used);
+  if (allUsed) {
+    pieces = generatePieces();
+    if (!hasAnyMoves(grid, pieces)) {
+      gameOver = true;
+      sfxGameOver();
+    }
+  } else if (!hasAnyMoves(grid, pieces)) {
+    gameOver = true;
+    sfxGameOver();
+  }
+
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('blockblast_best', bestScore);
+  }
+
+  updateUI();
+  drawGrid();
+  drawPieces();
+}
+
+function undo() {
+  if (moveHistory.length === 0) return;
+  sfxUndo();
+  const prev = moveHistory.pop();
+  grid = prev.grid;
+  pieces = prev.pieces;
+  score = prev.score;
+  comboCount = prev.comboCount;
+  selectedPiece = -1;
+  hoverCell = null;
+  clearingCells = [];
+  clearAnim = 0;
+  gameOver = false;
+  updateUI();
+  drawGrid();
+  drawPieces();
+}
+
+// ==================== DRAWING ====================
+
+function getCellColor(idx) {
+  if (!grid[idx]) return 'transparent';
+  return COLORS[grid[idx] - 1];
+}
+
+function drawGrid() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Screen shake
+  let sx = 0, sy = 0;
+  if (shakeAmount > 0.01) {
+    sx = (Math.random() - 0.5) * shakeAmount * cellSize * 0.3;
+    sy = (Math.random() - 0.5) * shakeAmount * cellSize * 0.3;
+    shakeAmount *= 0.82;
+  }
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Grid background
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(gridPadding, gridPadding, cellSize * GRID, cellSize * GRID);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= GRID; r++) {
+    ctx.beginPath();
+    ctx.moveTo(gridPadding, gridPadding + r * cellSize);
+    ctx.lineTo(gridPadding + GRID * cellSize, gridPadding + r * cellSize);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= GRID; c++) {
+    ctx.beginPath();
+    ctx.moveTo(gridPadding + c * cellSize, gridPadding);
+    ctx.lineTo(gridPadding + c * cellSize, gridPadding + GRID * cellSize);
+    ctx.stroke();
+  }
+
+  // Cells
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const idx = r * GRID + c;
+      const color = getCellColor(idx);
+      if (color === 'transparent') continue;
+      const x = gridPadding + c * cellSize + 1;
+      const y = gridPadding + r * cellSize + 1;
+      const s = cellSize - 2;
+
+      // Clearing animation
+      let alpha = 1;
+      let scale = 1;
+      if (clearingCells.includes(idx) && clearAnim > 0) {
+        alpha = clearAnim;
+        scale = clearAnim;
+      }
+
+      ctx.save();
+      if (scale !== 1) {
+        const cx = x + s/2, cy = y + s/2;
+        ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy);
+      }
+      ctx.globalAlpha = alpha;
+
+      // Cell with gradient
+      const grad = ctx.createLinearGradient(x, y, x + s, y + s);
+      grad.addColorStop(0, color);
+      grad.addColorStop(1, color + 'cc');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(x, y, s, s, Math.max(2, cellSize * 0.15));
+      ctx.fill();
+
+      // Inner highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath();
+      ctx.roundRect(x + s*0.15, y + s*0.1, s*0.7, s*0.35, Math.max(1, cellSize * 0.08));
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  // Hover preview
+  if (selectedPiece >= 0 && hoverCell && !gameOver) {
+    const piece = pieces[selectedPiece];
+    if (piece && !piece.used) {
+      const shape = piece.shape;
+      const h = shape.length, w = shape[0].length;
+      const valid = canPlace(grid, shape, hoverCell.row, hoverCell.col);
+      ctx.globalAlpha = 0.5;
+      for (let r = 0; r < h; r++) {
+        for (let c = 0; c < w; c++) {
+          if (!shape[r][c]) continue;
+          const x = gridPadding + (hoverCell.col + c) * cellSize + 1;
+          const y = gridPadding + (hoverCell.row + r) * cellSize + 1;
+          const s = cellSize - 2;
+          ctx.fillStyle = valid ? piece.color : '#ef4444';
+          ctx.beginPath();
+          ctx.roundRect(x, y, s, s, Math.max(2, cellSize * 0.15));
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Game over overlay
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(gridPadding, gridPadding, cellSize * GRID, cellSize * GRID);
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${cellSize * 0.5}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', gridPadding + cellSize * GRID / 2, gridPadding + cellSize * GRID / 2 - cellSize * 0.1);
+    ctx.font = `${cellSize * 0.25}px system-ui`;
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Tap New Game', gridPadding + cellSize * GRID / 2, gridPadding + cellSize * GRID / 2 + cellSize * 0.5);
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const pt = particles[i];
+    pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.2; pt.life -= 0.02;
+    if (pt.life <= 0) { particles.splice(i, 1); continue; }
+    ctx.globalAlpha = pt.life;
+    ctx.fillStyle = pt.color;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, pt.size * pt.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+function drawPieces() {
+  const area = document.getElementById('piecesArea');
+  area.innerHTML = '';
+
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i];
+    const slot = document.createElement('div');
+    slot.className = 'pieceSlot' + (i === selectedPiece ? ' selected' : '') + (piece.used ? ' used' : '');
+    slot.dataset.index = i;
+
+    const pc = document.createElement('canvas');
+    const pctx = pc.getContext('2d');
+    const size = 80 * dpr;
+    pc.width = size; pc.height = size;
+    pc.style.width = '80px'; pc.style.height = '80px';
+
+    const shape = piece.shape;
+    const h = shape.length, w = shape[0].length;
+    const blockSize = Math.floor(size / Math.max(h, w, 3.5));
+    const ox = (size - w * blockSize) / 2;
+    const oy = (size - h * blockSize) / 2;
+
+    for (let r = 0; r < h; r++) {
+      for (let c = 0; c < w; c++) {
+        if (!shape[r][c]) continue;
+        const x = ox + c * blockSize + 1;
+        const y = oy + r * blockSize + 1;
+        const s = blockSize - 2;
+        const grad = pctx.createLinearGradient(x, y, x + s, y + s);
+        grad.addColorStop(0, piece.color);
+        grad.addColorStop(1, piece.color + 'cc');
+        pctx.fillStyle = grad;
+        pctx.beginPath();
+        pctx.roundRect(x, y, s, s, Math.max(2, blockSize * 0.15));
+        pctx.fill();
+        pctx.fillStyle = 'rgba(255,255,255,0.15)';
+        pctx.beginPath();
+        pctx.roundRect(x + s*0.15, y + s*0.1, s*0.7, s*0.35, Math.max(1, blockSize * 0.08));
+        pctx.fill();
+      }
+    }
+
+    slot.appendChild(pc);
+    slot.addEventListener('click', () => {
+      if (gameOver || piece.used) return;
+      selectedPiece = (selectedPiece === i) ? -1 : i;
+      sfxSelect();
+      drawPieces();
+      drawGrid();
+    });
+    area.appendChild(slot);
+  }
+}
+
+function updateUI() {
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('bestVal').textContent = bestScore;
+  document.getElementById('comboVal').textContent = comboCount;
+  if (gameOver) {
+    document.getElementById('status').textContent = 'Game Over! No more moves.';
+    document.getElementById('status').style.color = '#f472b6';
+  } else if (selectedPiece >= 0) {
+    document.getElementById('status').textContent = 'Tap the grid to place the block';
+    document.getElementById('status').style.color = '#facc15';
+  } else {
+    document.getElementById('status').textContent = 'Select a block, then tap the grid';
+    document.getElementById('status').style.color = '#cbd5e1';
+  }
+}
+
+// ==================== INPUT ====================
+
+function getGridCell(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+  const col = Math.floor((x - gridPadding) / cellSize);
+  const row = Math.floor((y - gridPadding) / cellSize);
+  if (col < 0 || col >= GRID || row < 0 || row >= GRID) return null;
+  return { row, col };
+}
+
+canvas.addEventListener('click', (e) => {
+  if (gameOver) return;
+  const cell = getGridCell(e);
+  if (!cell) { hoverCell = null; drawGrid(); return; }
+  if (selectedPiece < 0) return;
+  placePieceAt(selectedPiece, cell.row, cell.col);
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (gameOver || selectedPiece < 0) { hoverCell = null; return; }
+  const cell = getGridCell(e);
+  if (!cell) { hoverCell = null; drawGrid(); return; }
+  if (!hoverCell || hoverCell.row !== cell.row || hoverCell.col !== cell.col) {
+    hoverCell = cell;
+    drawGrid();
+  }
+});
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (gameOver || selectedPiece < 0) { hoverCell = null; return; }
+  const cell = getGridCell(e.touches[0]);
+  if (!cell) { hoverCell = null; drawGrid(); return; }
+  if (!hoverCell || hoverCell.row !== cell.row || hoverCell.col !== cell.col) {
+    hoverCell = cell;
+    drawGrid();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (gameOver) return;
+  const cell = getGridCell(e.touches[0]);
+  if (!cell) { hoverCell = null; drawGrid(); return; }
+  hoverCell = cell;
+  if (selectedPiece < 0) return;
+  placePieceAt(selectedPiece, cell.row, cell.col);
+}, { passive: false });
+
+canvas.addEventListener('mouseleave', () => { hoverCell = null; drawGrid(); });
+
+document.getElementById('btnUndo').addEventListener('click', undo);
+document.getElementById('btnReset').addEventListener('click', initGrid);
+
+// ==================== ANIMATION LOOP ====================
+
+function animLoop() {
+  if (clearAnim > 0) {
+    clearAnim -= 0.06;
+    if (clearAnim <= 0) { clearingCells = []; clearAnim = 0; }
+  }
+  drawGrid();
+  if (clearAnim > 0 || particles.length > 0 || shakeAmount > 0.01) {
+    animFrame = requestAnimationFrame(animLoop);
+  } else {
+    animFrame = null;
+  }
+}
+
+const origDrawGrid = drawGrid;
+drawGrid = function() {
+  origDrawGrid();
+  if ((clearAnim > 0 || particles.length > 0 || shakeAmount > 0.01) && !animFrame) {
+    animFrame = requestAnimationFrame(animLoop);
+  }
+};
+
+// ==================== INIT ====================
+
+initGrid();
+updateUI();
+</script>
+</body>
+</html>

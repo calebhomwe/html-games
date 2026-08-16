@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Isle of Bells — Cozy Life</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{background:#0e0a14;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#ffe9c7;
+    overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+  .back{position:fixed;top:10px;left:12px;z-index:60;color:#cbb8d9;text-decoration:none;font-size:13px;
+    font-weight:800;background:rgba(0,0,0,.35);padding:6px 12px;border-radius:10px;backdrop-filter:blur(4px)}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 100% at 50% 0%,#123, #0c1520 70%)}
+  #game{display:block;position:absolute;max-width:none;max-height:none;touch-action:none}
+  #hud{position:fixed;left:0;right:0;top:0;display:flex;align-items:center;gap:7px;padding:8px 10px;
+    pointer-events:none;z-index:50;flex-wrap:wrap;justify-content:center}
+  .stat{background:rgba(20,14,28,.74);border:1px solid rgba(255,233,199,.16);border-radius:12px;padding:4px 10px;
+    font-weight:800;font-size:13px;color:#ffe9c7;display:flex;gap:5px;align-items:center;box-shadow:0 3px 10px rgba(0,0,0,.35)}
+  .stat small{color:#b9a3c9;font-weight:600;font-size:10px}
+  #toolbar{position:fixed;left:0;right:0;bottom:6px;display:flex;gap:6px;justify-content:center;z-index:50;
+    padding:0 8px;flex-wrap:nowrap;overflow-x:auto}
+  .tool,.iconbtn{background:rgba(20,14,28,.82);border:2px solid rgba(255,233,199,.14);border-radius:13px;
+    min-width:46px;min-height:46px;font-size:23px;cursor:pointer;color:#ffe9c7;flex:0 0 auto;
+    box-shadow:0 4px 12px rgba(0,0,0,.4)}
+  .tool:active,.iconbtn:active{transform:scale(.9)}
+  .tool.on{border-color:#ffd86b;box-shadow:0 0 14px rgba(255,216,107,.6);background:#4a3450}
+  .tool.not{opacity:.35}
+  #speech{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:70;max-width:88vw;
+    background:linear-gradient(180deg,#fff6e3,#ffe6bd);border:3px solid #fff;border-radius:20px;padding:11px 16px;
+    color:#4a2f1f;font-weight:700;font-size:14px;line-height:1.4;box-shadow:0 10px 30px rgba(0,0,0,.5);
+    pointer-events:none;opacity:0;transition:opacity .25s}
+  #speech.show{opacity:1}
+  #toastWrap{position:fixed;left:0;right:0;top:64px;display:flex;flex-direction:column;align-items:center;
+    z-index:78;pointer-events:none;gap:4px}
+  .toast{background:linear-gradient(180deg,#fff6e3,#ffe6bd);color:#4a2f1f;font-weight:800;font-size:13px;
+    border-radius:14px;padding:7px 15px;box-shadow:0 6px 20px rgba(0,0,0,.5);animation:toastIn .3s ease-out;
+    max-width:92vw}
+  @keyframes toastIn{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
+  #muteBtn{position:fixed;bottom:10px;right:10px;z-index:55;border-radius:50%}
+  #help{position:fixed;right:10px;top:58px;z-index:56;border-radius:50%;min-width:42px;min-height:42px;
+    font-size:18px;background:rgba(20,14,28,.82);border:1px solid rgba(255,233,199,.16);color:#ffe9c7;cursor:pointer}
+  .ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:80;
+    background:rgba(10,6,15,.8);backdrop-filter:blur(5px);padding:16px;overflow:auto}
+  .ov.hidden{display:none}
+  .box{background:linear-gradient(180deg,#2b2033,#3a2c44);border:1px solid rgba(255,216,107,.28);
+    border-radius:20px;padding:20px;max-width:470px;width:100%;text-align:center;box-shadow:0 16px 60px rgba(0,0,0,.7);
+    max-height:92vh;overflow:auto}
+  .big{font-size:56px;line-height:1.1}
+  .title{font-size:30px;font-weight:900;color:#ffd86b;text-shadow:0 0 22px rgba(255,216,107,.5)}
+  .sub{color:#b9a3c9;margin:6px 0 14px;font-size:14px;line-height:1.5}
+  .btn{display:block;width:100%;background:linear-gradient(180deg,#ffb347,#e8881f);color:#3a1d02;border:none;
+    border-radius:14px;min-height:52px;font-size:17px;font-weight:900;cursor:pointer;margin:8px 0;
+    box-shadow:0 5px 16px rgba(255,160,60,.4)}
+  .btn.alt{background:linear-gradient(180deg,#5a4a6b,#3a2c44);color:#ffe9c7;box-shadow:none}
+  .btn:active{transform:scale(.96)}
+  .row{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .chip{background:#2b2033;border:2px solid rgba(255,233,199,.14);border-radius:12px;padding:8px 12px;font-size:22px;
+    cursor:pointer;min-height:44px}
+  .chip.on{border-color:#ffd86b;background:#4a3450;box-shadow:0 0 12px rgba(255,216,107,.5)}
+  input[type=text]{width:100%;background:#1a1322;border:2px solid rgba(255,233,199,.25);border-radius:12px;
+    color:#ffe9c7;font-size:18px;font-weight:700;padding:12px;text-align:center;outline:none}
+  .chead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+  .chead h2{font-size:19px;color:#ffd86b;text-align:left}
+  .x{background:rgba(255,255,255,.12);border:none;color:#ffe9c7;border-radius:10px;width:40px;height:40px;font-size:18px;
+    cursor:pointer;font-weight:900}
+  .list{display:flex;flex-direction:column;gap:6px;text-align:left;margin:6px 0}
+  .li{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border-radius:12px;padding:8px 10px}
+  .li .e{font-size:24px;flex:none}
+  .li .n{flex:1;font-weight:700;font-size:13px}
+  .li .n small{display:block;color:#b9a3c9;font-weight:600;font-size:11px}
+  .li .p{font-weight:800;color:#ffd86b;font-size:13px;white-space:nowrap}
+  .li .a{background:linear-gradient(180deg,#ffb347,#e8881f);color:#3a1d02;border:none;border-radius:10px;min-height:40px;
+    padding:0 14px;font-weight:900;cursor:pointer;font-size:13px;flex:none}
+  .li .a.gray{background:#4a3a55;color:#ffe9c7}
+  .bagnote{font-size:12px;color:#b9a3c9;font-weight:600}
+  .mini{font-size:11px;color:#8d7a9c}
+  .hint{font-size:12px;color:#b9a3c9;font-weight:600;background:rgba(255,255,255,.07);border-radius:10px;padding:6px 10px}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← Hub</a>
+<div id="stage"><canvas id="game"></canvas></div>
+
+<div id="hud">
+  <div class="stat">🕐<span id="clock">00:00</span><small id="wDay"></small></div>
+  <div class="stat">💰<span id="bells">0</span></div>
+  <div class="stat">🏡<span id="vibe">0</span></div>
+  <div class="stat">🎒<span id="bagCount">0</span></div>
+</div>
+
+<div id="toolbar">
+  <button class="tool not" data-t="axe"  id="t_axe">🪓</button>
+  <button class="tool"    data-t="net"   id="t_net">🪡</button>
+  <button class="tool not" data-t="rod"  id="t_rod">🎣</button>
+  <button class="tool"    data-t="shovel" id="t_shovel">⛏️</button>
+  <button class="tool"    data-t="can"   id="t_can">🚿</button>
+  <button class="tool not" data-t="sling" id="t_sling">🪃</button>
+  <button class="iconbtn" id="bagBtn">🎒</button>
+  <button class="iconbtn" id="shopBtn">🏪</button>
+  <button class="iconbtn" id="musBtn">🏛️</button>
+</div>
+
+<div id="speech"></div>
+<div id="toastWrap"></div>
+<button class="iconbtn" id="muteBtn">🔊</button>
+<button id="help">❔</button>
+
+<div class="ov" id="ovIntro">
+  <div class="box">
+    <div class="big">🏝️</div>
+    <div class="title">Isle of Bells</div>
+    <p class="sub">A cozy island where fish bite, bugs buzz, trees giggle when shaken and four fuzzy villagers need a friend. Fish · bug · dig · farm · decorate — make it yours.</p>
+    <input type="text" id="nameIn" maxlength="10" placeholder="Your name, islander?">
+    <div class="bagnote" style="margin:10px 0 4px">pick your look</div>
+    <div class="row" id="avatarRow"></div>
+    <div class="bagnote" style="margin:8px 0 2px">pick your thread</div>
+    <div class="row" id="shirtRow"></div>
+    <button class="btn" id="playBtn">🌅 Set Sail →</button>
+    <p class="mini">Autosaves on this device. Best with sound on.</p>
+  </div>
+</div>
+
+<div class="ov hidden" id="ovHelp">
+  <div class="box">
+    <div class="chead"><h2>❔ How to Island</h2><button class="x" data-close="ovHelp">✕</button></div>
+    <div class="list">
+      <div class="li"><span class="e">🕹️</span><span class="n">Move <small>WASD / arrows · or drag anywhere (touch = joystick)</small></span></div>
+      <div class="li"><span class="e">👆</span><span class="n">Tap <small>tap an object to walk to it &amp; act · tap water to fish</small></span></div>
+      <div class="li"><span class="e">␣</span><span class="n">Act <small>Space / E does the nearest thing</small></span></div>
+      <div class="li"><span class="e">🔢</span><span class="n">Tools <small>1–6 or tap the bar. Net=bugs, rod=fish, ⛏️=dig/rocks, 🚿=water crops, 🪓=chop, 🪃=balloons</small></span></div>
+      <div class="li"><span class="e">🗯️</span><span class="n">Villagers <small>Do their quests for bells &amp; furniture!</small></span></div>
+      <div class="li"><span class="e">🎈</span><span class="n">Balloon party <small>pop with slingshot → presents</small></span></div>
+      <div class="li"><span class="e">⭐</span><span class="n">Sparkle spots <small>dig for fossils &amp; treasure</small></span></div>
+    </div>
+    <button class="btn alt" data-close="ovHelp">Gotcha!</button>
+  </div>
+</div>
+
+<div class="ov hidden" id="ovShop">
+  <div class="box">
+    <div class="chead"><h2>🏪 Nook &amp; Bell Co.</h2><button class="x" data-close="ovShop">✕</button></div>
+    <div class="row">
+      <button class="btn alt shopTab" id="tabBuy" style="flex:1">🛍️ Buy</button>
+      <button class="btn alt shopTab" id="tabSell" style="flex:1">💸 Sell</button>
+    </div>
+    <div id="shopBody"></div>
+  </div>
+</div>
+
+<div class="ov hidden" id="ovBag">
+  <div class="box">
+    <div class="chead"><h2>🎒 Pockets</h2><button class="x" data-close="ovBag">✕</button></div>
+    <div id="bagBody"></div>
+  </div>
+</div>
+
+<div class="ov hidden" id="ovMus">
+  <div class="box">
+    <div class="chead"><h2>🏛️ Island Museum</h2><button class="x" data-close="ovMus">✕</button></div>
+    <div id="musTabs" class="row"></div>
+    <div id="musBody"></div>
+  </div>
+</div>
+
+<div class="ov hidden" id="ovHome">
+  <div class="box">
+    <div class="chead"><h2 id="homeTitle">🏠 Home</h2><button class="x" data-close="ovHome">✕</button></div>
+    <div id="homeBody"></div>
+  </div>
+</div>
+
+<div class="ov hidden" id="ovQuest">
+  <div class="box">
+    <div class="chead"><h2 id="qTitle">📋 Request</h2><button class="x" data-close="ovQuest">✕</button></div>
+    <div id="qBody"></div>
+  </div>
+</div>
+
+<script src="isle-of-bells-data.js"></script>
+<script src="isle-of-bells.js"></script>
+</body>
+</html>
