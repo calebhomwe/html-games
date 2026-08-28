@@ -678,6 +678,7 @@ initWorld();
 by = ballRestY(0); camY = by - desired;
 $('mute').textContent = muted ? '🔇' : '🔊';
 $('ringInfo').textContent = '💍 Golden Rings Ever: ' + ringBest;
+$('gemEverInfo').textContent = '💎 Gems Ever: ' + gemEverTotal;
 $('comboInfo').textContent = 'Best Combo: ×' + comboRec;
 updateHUD();
 requestAnimationFrame(loop);
