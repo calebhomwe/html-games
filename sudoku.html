@@ -9,6 +9,7 @@
 html,body{height:100%}
 body{background:radial-gradient(900px 600px at 50% -20%,#1d4ed8,#0f0f23 60%,#07070f);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:system-ui,-apple-system,sans-serif;touch-action:manipulation;overflow:hidden;user-select:none;-webkit-user-select:none;color:#fff;padding-top:34px}
 .back{position:fixed;top:12px;left:14px;color:#94a3b8;text-decoration:none;font-size:14px;font-weight:800;z-index:10}
+.mute{position:fixed;top:10px;right:12px;z-index:10;width:44px;height:44px;border:none;border-radius:12px;background:#1e293b;font-size:20px;cursor:pointer;color:#fff}
 h1{font-size:26px;font-weight:900;letter-spacing:-1px}
 .hud{display:flex;gap:10px;font-weight:800;font-size:13px}
 .hud span{background:#1e293b;padding:7px 13px;border-radius:10px}
@@ -42,7 +43,10 @@ h1{font-size:26px;font-weight:900;letter-spacing:-1px}
 .dbtn{border:none;border-radius:999px;background:#1e293b;color:#cbd5e1;font-size:14px;font-weight:800;padding:10px 20px;cursor:pointer}
 .dbtn:active{scale:.94}
 .hidden{display:none}
-#fx{position:fixed;inset:0;pointer-events:none;z-index:30}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30}
+.jflash{position:fixed;inset:0;pointer-events:none;z-index:40;opacity:0;transition:opacity .22s ease-out}
+.nb.jpop{animation:jpopk .35s ease}
+@keyframes jpopk{40%{transform:scale(1.18)}}
 @keyframes pop{0%{transform:scale(.4);opacity:.3}60%{transform:scale(1.15)}100%{transform:scale(1)}}
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
 @media (max-height:600px){
@@ -62,6 +66,7 @@ h1{font-size:18px}
 </head>
 <body>
 <a class="back" href="../index.html">← Hub</a>
+<button class="mute" id="muteBtn">🔊</button>
 <h1>Sudoku</h1>
 <div class="hud"><span>❌ <b id="errs">0</b></span><span>⏱ <b id="time">0:00</b></span><span id="diffTag">Easy</span></div>
 <div id="grid"></div>
@@ -69,6 +74,7 @@ h1{font-size:18px}
 <div class="tools">
   <button class="tool" id="eraseBtn">⌫</button>
   <button class="tool" id="notesBtn">✎</button>
+  <button class="tool" id="hintBtn" style="background:#38bdf8;color:#0c1226">💡</button>
   <button class="tool" id="newBtn">New</button>
 </div>
 <div class="ov hidden" id="start">
@@ -85,10 +91,17 @@ h1{font-size:18px}
   <h1>🎉 Solved!</h1>
   <div style="font-size:16px">Mistakes: <b id="finErrs">0</b> · Time: <b id="finTime">0:00</b></div>
   <div style="font-size:14px;color:#94a3b8">Best: <b id="bestTime">–</b> <span id="newBest" class="hidden" style="color:#facc15;font-weight:900">New best!</span></div>
+  <div style="font-size:14px;color:#fda4af">🔥 Best streak: <b id="finStreak">0</b> · 💡 Hints: <b id="finHints">0</b></div>
+  <div style="font-size:13px;color:#a78bfa" id="badgeLine"></div>
+  <div style="font-size:13px;color:#38bdf8" id="solvedLine"></div>
+  <div style="font-size:13px;color:#fb923c" id="dailyLine"></div>
+  <div style="font-size:13px;color:#facc15" id="puristLine"></div>
+  <div style="font-size:12px;color:#64748b" id="overLife"></div>
   <button class="btn" id="againBtn">New Game</button>
 </div>
 <canvas id="fx"></canvas>
 <script>
+
 const BASE=[
 [5,3,4,6,7,8,9,1,2],[6,7,2,1,9,5,3,4,8],[1,9,8,3,4,2,5,6,7],
 [8,5,9,7,6,1,4,2,3],[4,2,6,8,5,3,7,9,1],[7,1,3,9,2,4,8,5,6],
@@ -100,9 +113,19 @@ for(let j=0;j<81;j++){if(j===i)continue;const rj=(j/9)|0,cj=j%9;
 if(rj===r||cj===c||((rj/3)|0)===((r/3)|0)&&((cj/3)|0)===((c/3)|0))p.push(j);}
 PEERS.push(p);}
 let sol=[],given=[],user=[],notes=[],sel=-1,notesMode=false,errors=0,secs=0,timer=null,diff='easy',done=false,popIdx=-1,running=false;
+let placementStreak=0,maxStreak=0,hints=0;
+let solvedTotal=0,dayStreak=0,lastDay='';
+let lifeSecs=0,puristRuns=0;
+function lifeFmt(){const h=(lifeSecs/3600)|0,m=((lifeSecs%3600)/60)|0;return h?h+'h '+m+'m':m+'m';}
+let muted=localStorage.getItem('sudokuMuted')==='1';
 let AC;
 function initAudio(){if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();}}
-function tone(f,d,type,v){if(!AC)return;try{const t0=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,t0);g.gain.setValueAtTime(v||.15,t0);g.gain.exponentialRampToValueAtTime(.001,t0+d);o.connect(g);g.connect(AC.destination);o.start(t0);o.stop(t0+d);}catch(e){}}
+function tone(f,d,type,v){if(!AC||muted)return;try{const t0=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,t0);g.gain.setValueAtTime(v||.15,t0);g.gain.exponentialRampToValueAtTime(.001,t0+d);o.connect(g);g.connect(AC.destination);o.start(t0);o.stop(t0+d);}catch(e){}}
+const SFXP={};['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
+function sfx(n){if(muted)return;var a=SFXP[n];if(!a)return;try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}}
+var jflashEl=null;
+function jflash(col){if(!jflashEl){jflashEl=document.createElement('div');jflashEl.className='jflash';document.body.appendChild(jflashEl);}jflashEl.style.background=col;jflashEl.style.transition='none';jflashEl.style.opacity='.26';void jflashEl.offsetWidth;jflashEl.style.transition='';jflashEl.style.opacity='0';}
+function jpop(el){if(!el)return;el.classList.remove('jpop');void el.offsetWidth;el.classList.add('jpop');}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function gen(){
 let s=BASE.map(r=>r.slice());
@@ -146,6 +169,7 @@ const bak=g[i];g[i]=0;
 if(countSol(g,2)===1)removed++;else g[i]=bak;}
 return g;}
 function fmt(t){return (t/60|0)+':'+String(t%60).padStart(2,'0');}
+function dayKey(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
 function ovOpen(){return !document.getElementById('start').classList.contains('hidden')||!document.getElementById('over').classList.contains('hidden');}
 function newGame(d){
 diff=d||diff;
@@ -153,7 +177,7 @@ document.getElementById('diffTag').textContent=diff[0].toUpperCase()+diff.slice(
 sol=gen().flat();
 const puz=dig(sol,CLUES[diff]);
 given=puz.slice();user=puz.slice();notes=new Array(81).fill(0);
-errors=0;secs=0;sel=-1;notesMode=false;done=false;popIdx=-1;
+errors=0;secs=0;sel=-1;notesMode=false;done=false;popIdx=-1;placementStreak=0;maxStreak=0;hints=0;
 document.getElementById('notesBtn').classList.remove('on');
 document.getElementById('errs').textContent=0;document.getElementById('time').textContent='0:00';
 clearInterval(timer);
@@ -169,7 +193,7 @@ g.addEventListener('pointerdown',e=>{
 const d=e.target.closest('.c');if(!d)return;
 if(done||ovOpen())return;initAudio();
 const i=+d.dataset.i;
-if(sel!==i){sel=i;tone(880,.03,'sine',.05);}
+if(sel!==i){sel=i;sfx('tap');}
 render();
 });
 const pad=document.getElementById('pad');
@@ -195,7 +219,7 @@ if(!given[i]&&user[i]&&user[i]!==sol[i])cls+=' err';
 if(conf.has(i))cls+=' conflict';
 if(sv&&i!==sel&&user[i]===sv)cls+=' same';
 if(i===popIdx)cls+=' pop';
-d.className=cls;
+if(d._cls!==cls){d._cls=cls;d.className=cls;}
 const val=given[i]||user[i];
 if(val){
 const s=String(val);
@@ -213,6 +237,8 @@ for(let k=1;k<=9;k++){
 const left=9-user.filter(v=>v===k).length;
 const b=padBtns[k-1];
 b.className='nb'+(left<=0?' empty':'');
+if(left===0&&b._l>0)jpop(b);
+b._l=left;
 const cnt=b.lastChild;const t=String(Math.max(left,0));
 if(cnt.textContent!==t)cnt.textContent=t;
 }
@@ -221,16 +247,37 @@ function shake(){const g=document.getElementById('grid');g.classList.remove('sha
 function input(k){
 if(done||sel<0||given[sel]||ovOpen())return;
 initAudio();
-if(notesMode){if(!user[sel]){notes[sel]^=1<<(k-1);tone(600,.05,'sine',.1);render();}return;}
+if(notesMode){if(!user[sel]){notes[sel]^=1<<(k-1);sfx('tap');render();}return;}
 if(user[sel]===k)return;
-if(k===sol[sel]){tone(760,.08,'triangle',.15);popIdx=sel;}
-else{errors++;document.getElementById('errs').textContent=errors;tone(190,.18,'sawtooth',.16);shake();}
+if(k===sol[sel]){sfx('pop');popIdx=sel;}
+else{errors++;document.getElementById('errs').textContent=errors;sfx('buzz');shake();jflash('#f87171');}
+if(k===sol[sel]){placementStreak++;if(placementStreak>maxStreak)maxStreak=placementStreak;if(placementStreak===10)sfx('levelup');}
+else{placementStreak=0;}
 user[sel]=k;notes[sel]=0;
 for(const p of PEERS[sel])notes[p]&=~(1<<(k-1));
 render();
 if(user.every((v,i)=>v===sol[i]))win();
 }
-function erase(){if(done||sel<0||given[sel]||ovOpen())return;initAudio();if(user[sel]||notes[sel]){user[sel]=0;notes[sel]=0;tone(440,.04,'sine',.08);render();}}
+function erase(){if(done||sel<0||given[sel]||ovOpen())return;initAudio();if(user[sel]||notes[sel]){user[sel]=0;notes[sel]=0;sfx('tap');render();}}
+function hint(){
+if(done||sel<0||given[sel]||ovOpen())return;
+initAudio();
+if(user[sel]===sol[sel]){sfx('tap');return;}
+sfx('whoosh');
+hints++;
+user[sel]=sol[sel];notes[sel]=0;
+for(const p of PEERS[sel])notes[p]&=~(1<<(sol[sel]-1));
+popIdx=sel;
+render();
+if(user.every((v,i)=>v===sol[i]))win();
+}
+const BLITZ={easy:180,medium:420,hard:720};
+let badges=[];
+const BADGE_KEYS={perfect:'🧼',blitz:'⚡',hardclear:'🏆',streak10:'🔥',purist:'🧠'};
+const SOLVE_TIERS=[[1,'Solver'],[5,'Grid Finisher'],[15,'Number Whisperer'],[30,'Sudoku Knight'],[60,'Sudoku Master'],[120,'Sudoku Sage'],[250,'Sudoku Empath']];
+function solveRankOf(n){let r=SOLVE_TIERS[0][1];for(const t of SOLVE_TIERS){if(n>=t[0])r=t[1];}return r;}
+function loadBadges(){try{const r=localStorage.getItem('sudoBadges');if(r){badges=JSON.parse(r);if(!(badges instanceof Array))badges=[];}}catch(e){badges=[];}}
+function earnBadge(b){if(badges.indexOf(b)!==-1)return false;badges.push(b);try{localStorage.setItem('sudoBadges',JSON.stringify(badges));}catch(e){}return true;}
 function win(){
 done=true;clearInterval(timer);running=false;
 document.getElementById('finErrs').textContent=errors;
@@ -238,8 +285,39 @@ document.getElementById('finTime').textContent=fmt(secs);
 const key='sudoBest_'+diff,prev=+(localStorage.getItem(key)||0);
 if(!prev||secs<prev){localStorage.setItem(key,secs);document.getElementById('bestTime').textContent=fmt(secs);document.getElementById('newBest').classList.remove('hidden');}
 else{document.getElementById('bestTime').textContent=fmt(prev);document.getElementById('newBest').classList.add('hidden');}
+document.getElementById('finStreak').textContent=maxStreak;
+document.getElementById('finHints').textContent=hints;
+const purist=(hints===0&&errors===0);
+if(purist)puristRuns++;
+try{localStorage.setItem('sudo_purist',String(puristRuns));}catch(e){}
+lifeSecs+=secs;
+try{localStorage.setItem('sudo_life',String(lifeSecs));}catch(e){}
+document.getElementById('puristLine').textContent='🧠 Purist wins: '+puristRuns+(purist&&puristRuns%5===0?' — MILESTONE!':'');
+if(purist&&puristRuns%5===0)sfx('levelup');
+document.getElementById('overLife').textContent='🕰 Lifetime '+lifeFmt()+' · 🧩 Solved '+solvedTotal;
+solvedTotal++;
+try{localStorage.setItem('sudo_solved',String(solvedTotal));}catch(e){}
+const sr=solveRankOf(solvedTotal),prevSr=solveRankOf(solvedTotal-1);
+document.getElementById('solvedLine').textContent='🧩 Solved '+solvedTotal+' · 🏅 '+sr+(sr!==prevSr?' (NEW!)':'');
+if(sr!==prevSr)sfx('levelup');
+const dk=dayKey(new Date());
+if(lastDay!==dk){
+  dayStreak=(lastDay===dayKey(new Date(Date.now()-86400000)))?dayStreak+1:1;
+  lastDay=dk;
+  try{localStorage.setItem('sudo_daily',JSON.stringify({d:dk,c:dayStreak}));}catch(e){}
+}
+document.getElementById('dailyLine').textContent='🔥 Daily streak: '+dayStreak;if(dayStreak>1)sfx('levelup');
+let newB='';
+if(errors===0&&earnBadge('perfect'))newB+=BADGE_KEYS.perfect;
+if(secs<=BLITZ[diff]&&earnBadge('blitz'))newB+=BADGE_KEYS.blitz;
+if(diff==='hard'&&earnBadge('hardclear'))newB+=BADGE_KEYS.hardclear;
+if(maxStreak>=10&&earnBadge('streak10'))newB+=BADGE_KEYS.streak10;
+if(purist&&earnBadge('purist'))newB+=BADGE_KEYS.purist;
+const have=badges.map(b=>BADGE_KEYS[b]).join(' ');
+document.getElementById('badgeLine').textContent=newB?('🎉 NEW BADGES: '+newB+' · '+have):(badges.length?('🏅 '+have):'');
 confetti();
-[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.18,'triangle',.2),i*160));
+jflash('#4ade80');
+sfx('win');
 setTimeout(()=>document.getElementById('over').classList.remove('hidden'),600);
 }
 function startTimer(){clearInterval(timer);running=true;timer=setInterval(()=>{secs++;document.getElementById('time').textContent=fmt(secs);},1000);}
@@ -251,7 +329,7 @@ function showStart(){
 clearInterval(timer);running=false;
 document.getElementById('bestLine').textContent='Best: '+['easy','medium','hard'].map(d=>{
 const b=+localStorage.getItem('sudoBest_'+d);
-return d[0].toUpperCase()+d.slice(1)+' '+(b?fmt(b):'–');}).join(' · ');
+return d[0].toUpperCase()+d.slice(1)+' '+(b?fmt(b):'–');}).join(' · ')+' · 🧩 '+solveRankOf(solvedTotal)+' · 🔥 '+dayStreak+'d'+(lifeSecs?' · 🕰 '+lifeFmt()+(puristRuns?' · 🧠 '+puristRuns:''):'');
 document.getElementById('start').classList.remove('hidden');
 }
 document.querySelectorAll('.dbtn').forEach(b=>b.addEventListener('pointerdown',()=>{initAudio();newGame(b.dataset.d);startTimer();}));
@@ -259,6 +337,7 @@ document.getElementById('againBtn').addEventListener('pointerdown',showStart);
 document.getElementById('newBtn').addEventListener('pointerdown',showStart);
 document.getElementById('eraseBtn').addEventListener('pointerdown',erase);
 document.getElementById('notesBtn').addEventListener('pointerdown',()=>{notesMode=!notesMode;document.getElementById('notesBtn').classList.toggle('on',notesMode);});
+document.getElementById('hintBtn').addEventListener('pointerdown',hint);
 window.addEventListener('keydown',e=>{
 if(ovOpen())return;
 if(e.key>='1'&&e.key<='9')input(+e.key);
@@ -286,6 +365,14 @@ for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;
 fctx.save();fctx.translate(p.x,p.y);fctx.rotate(p.r);fctx.fillStyle=p.c;fctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6);fctx.restore();}
 if(parts.length)requestAnimationFrame(fxTick);else{fxOn=false;fctx.clearRect(0,0,fx.width,fx.height);}
 }
+const muteBtn=document.getElementById('muteBtn');
+function updMute(){muteBtn.textContent=muted?'🔇':'🔊';}
+muteBtn.addEventListener('pointerdown',()=>{muted=!muted;localStorage.setItem('sudokuMuted',muted?'1':'0');updMute();});
+updMute();
+loadBadges();
+try{solvedTotal=parseInt(localStorage.getItem('sudo_solved')||'0',10)||0;}catch(e){}
+try{puristRuns=parseInt(localStorage.getItem('sudo_purist')||'0',10)||0;}catch(e){}
+try{lifeSecs=parseInt(localStorage.getItem('sudo_life')||'0',10)||0;}catch(e){}
 buildUI();
 showStart();
 </script>

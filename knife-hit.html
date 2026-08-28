@@ -39,17 +39,24 @@
 <div class="overlay" id="start">
   <h1>KNIFE HIT</h1>
   <div class="sub">Tap to throw a knife into the spinning log. Don't hit a stuck knife! Slice golden apples for +5. Clear the level to speed things up.</div>
+  <div class="best" id="emRow" style="min-height:22px"></div>
+  <div class="best" id="appleRow" style="min-height:22px"></div>
+  <div class="best" id="perfRow" style="min-height:22px"></div>
   <button id="playBtn">▶ PLAY</button>
 </div>
 <div class="overlay hidden" id="gameover">
   <h1>CLASH!</h1>
   <div class="score-big" id="finalScore">0</div>
   <div class="best" id="finalBest">Best: 0</div>
+  <div class="best" id="emRowGo" style="min-height:22px;font-size:15px"></div>
   <button id="restartBtn">↻ PLAY AGAIN</button>
 </div>
 <script>
+
 'use strict';
 const KEY = 'knife-hit-best';
+const EKEY = 'knife-hit-em';
+const EM_LEVELS = [3, 6, 9, 12];
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const $ = id => document.getElementById(id);
@@ -95,17 +102,55 @@ function beep(freq, dur, type, vol, slideTo) {
   o.start(t); o.stop(t + dur);
 }
 function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+const SFXP={};['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
+function sfx(n){if(muted)return;var a=SFXP[n];if(!a)return;try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}}
 
 const TAU = Math.PI * 2;
 function norm(a) { a = a % TAU; if (a < 0) a += TAU; return a; }
 function angDiff(a, b) { let d = norm(a - b); if (d > Math.PI) d = TAU - d; return d; }
 function rand(a, b) { return a + Math.random() * (b - a); }
 
-const log = { x: 0, y: 0, R: 0, angle: 0, omega: 1.4, segs: 6, dir: 1, pulse: 0 };
+const log = { x: 0, y: 0, R: 0, angle: 0, omega: 1.4, segs: 6, dir: 1, pulse: 0, squash: 0 };
 let knives = [], flying = null, apple = null, pieces = [], particles = [], floaters = [];
 let level = 1, score = 0, best = 0, target = 6, thrown = 0, boss = false, running = false, exploding = false, explodeT = 0, shake = 0;
+let flowStreak = 0, lastLandT = 0;
+const APT = [10, 25, 50, 100, 250, 500];
+let appleTot = 0, appleTier = 0;
+try { appleTot = parseInt(localStorage.getItem('knife-hit-apples') || '0', 10) || 0; appleTier = parseInt(localStorage.getItem('knife-hit-tier') || '0', 10) || 0; } catch (e) {}
+const PFT = [5, 15, 30, 60];
+let lvlApples = 0, perfectTot = 0, perfectTier = 0;
+try { perfectTot = parseInt(localStorage.getItem('knife-hit-perfect') || '0', 10) || 0; perfectTier = parseInt(localStorage.getItem('knife-hit-ptier') || '0', 10) || 0; } catch (e) {}
 
 try { best = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) {}
+
+let emblems = [];
+function loadEmblems() { try { emblems = JSON.parse(localStorage.getItem(EKEY) || '[]'); if (!Array.isArray(emblems)) emblems = []; } catch (e) { emblems = []; } }
+function saveEmblems() { try { localStorage.setItem(EKEY, JSON.stringify(emblems)); } catch (e) {} }
+function renderEmblems() {
+  const txt = emblems.length ? '🏅 ' + emblems.join('  ') : '';
+  const s = $('emRow'); if (s) s.textContent = txt;
+  const g = $('emRowGo'); if (g) g.textContent = txt;
+}
+function renderApples() {
+  const s = $('appleRow'); if (!s) return;
+  let txt = '🍎 ' + appleTot;
+  if (appleTier > 0) txt += ' · 🏅 ×' + appleTier;
+  s.textContent = txt;
+}
+function renderPerfect() {
+  const s = $('perfRow'); if (!s) return;
+  let txt = '✨ ' + perfectTot + (perfectTier > 0 ? ' · 🏅 ×' + perfectTier : '');
+  s.textContent = txt;
+}
+function earnEmblem(lv) {
+  if (EM_LEVELS.indexOf(lv) < 0 || emblems.indexOf('L' + lv) >= 0) return;
+  emblems.push('L' + lv);
+  saveEmblems();
+  renderEmblems();
+  addFloater('🏅 EMBLEM L' + lv + '!', log.x, log.y - log.R - 34, '#fbbf24');
+  sfx('levelup');
+  buzz(25);
+}
 
 let logGlow = null;
 function layout() {
@@ -147,6 +192,7 @@ function setupLevel() {
   knives = []; flying = null; apple = null;
   log.segs = 5 + Math.min(4, level - 1) + ((Math.random() * 3) | 0);
   log.omega = (1.2 + level * 0.16) * log.dir;
+  lvlApples = 0;
   target = 5 + ((Math.random() * 6) | 0);
   if (level >= 2 && Math.random() < 0.5) log.dir *= -1;
 }
@@ -161,6 +207,7 @@ function spawnApple() {
 
 function startGame() {
   level = 1; score = 0; shake = 0; exploding = false;
+  flowStreak = 0; lastLandT = 0;
   particles = []; pieces = []; floaters = [];
   log.dir = 1; log.angle = 0;
   setupLevel();
@@ -181,6 +228,7 @@ function endGame() {
   const nb = score > best;
   if (nb) { best = score; try { localStorage.setItem(KEY, String(best)); } catch (e) {} }
   $('finalBest').textContent = 'Best: ' + best + (nb ? '  🎉 NEW!' : '');
+  renderEmblems();
   $('gameover').classList.remove('hidden');
 }
 
@@ -188,7 +236,7 @@ function throwKnife() {
   if (!running || exploding || flying) return;
   ensureAudio();
   flying = { y: H + 30, ang: 0 };
-  beep(500, 0.06, 'square', 0.05);
+  sfx('whoosh');
 }
 function landKnife() {
   const a = norm(Math.PI / 2 - log.angle);
@@ -201,17 +249,39 @@ function landKnife() {
     score += 5;
     addFloater('+5 🍎', log.x + Math.cos(log.angle + apple.angle) * log.R, log.y + Math.sin(log.angle + apple.angle) * log.R - 20, '#fde047');
     burst(log.x + Math.cos(log.angle + apple.angle) * log.R, log.y + Math.sin(log.angle + apple.angle) * log.R, '#fde047', 16, 220);
-    beep(880, 0.18, 'triangle', 0.2, 1400);
+    sfx('coin');
     buzz(18);
     apple = null;
+    lvlApples++;
+    appleTot++;
+    try { localStorage.setItem('knife-hit-apples', String(appleTot)); } catch (e) {}
+    while (appleTier < APT.length && appleTot >= APT[appleTier]) {
+      appleTier++;
+      addFloater('🏅 ' + APT[appleTier - 1] + ' APPLES!', log.x, log.y - log.R - 58, '#fde047');
+      sfx('levelup');
+      buzz(25);
+    }
+    try { localStorage.setItem('knife-hit-tier', String(appleTier)); } catch (e) {}
   }
   knives.push({ angle: a });
   score += 1;
-  beep(220, 0.12, 'square', 0.18, 120);
+  sfx('hit');
   buzz(12);
-  burst(log.x, log.y + log.R, '#fda4af', 5, 140);
+  const tNow = Date.now();
+  flowStreak = (lastLandT && tNow - lastLandT <= 500) ? flowStreak + 1 : 1;
+  lastLandT = tNow;
+  if (flowStreak === 5 || flowStreak === 10 || flowStreak === 15 || flowStreak === 20) {
+    addFloater('FLOW ×' + flowStreak + '!', log.x, log.y - log.R - 34, '#a5b4fc');
+    sfx('whoosh');
+    buzz(15);
+  }
+  const ex = log.x + Math.cos(a) * (log.R - 4);
+  const ey = log.y + Math.sin(a) * (log.R - 4);
+  burst(ex, ey, '#fda4af', 5, 140);
+  burst(ex, ey, '#ffffff', 2, 220);
   shake = Math.max(shake, 3);
   log.pulse = 1;
+  log.squash = 1;
   $('score').textContent = score;
   if (knives.length >= target) levelUp();
 }
@@ -226,7 +296,7 @@ function levelUp() {
   burst(cx, cy, '#fbbf24', 40, 380);
   shake = 14;
   buzz(35);
-  beep(160, 0.4, 'sawtooth', 0.24, 40);
+  sfx('boom');
   knives = []; flying = null; apple = null;
 }
 function gameOver() {
@@ -238,13 +308,14 @@ function gameOver() {
   burst(log.x, log.y, '#fb7185', 40, 420);
   shake = 18;
   buzz(70);
-  beep(90, 0.5, 'sawtooth', 0.26, 30);
+  sfx('lose');
   setTimeout(endGame, 350);
 }
 
 function update(dt) {
   if (shake > 0) shake = Math.max(0, shake - 60 * dt);
   if (log.pulse > 0) log.pulse = Math.max(0, log.pulse - 3.5 * dt);
+  if (log.squash > 0) log.squash = Math.max(0, log.squash - 5 * dt);
   for (let i = pieces.length - 1; i >= 0; i--) {
     const p = pieces[i];
     p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 700 * dt; p.ang += p.rot * dt;
@@ -266,10 +337,23 @@ function update(dt) {
     if (explodeT > 0.7) {
       exploding = false;
       level++;
+      if (lvlApples === 0) {
+        perfectTot++;
+        try { localStorage.setItem('knife-hit-perfect', String(perfectTot)); } catch (e) {}
+        while (perfectTier < PFT.length && perfectTot >= PFT[perfectTier]) {
+          perfectTier++;
+          addFloater('🏅 PERFECT ×' + PFT[perfectTier - 1] + '!', log.x, log.y - log.R - 58, '#a7f3d0');
+          sfx('levelup');
+          buzz(25);
+        }
+        try { localStorage.setItem('knife-hit-ptier', String(perfectTier)); } catch (e) {}
+        addFloater('✨ PERFECT LEVEL!', log.x, log.y - log.R - 34, '#6ee7b7');
+      }
       log.dir = Math.random() < 0.55 ? 1 : -1;
       setupLevel();
       spawnApple();
       $('level').textContent = level;
+      earnEmblem(level);
       addFloater('LEVEL ' + level, log.x, log.y, '#fde047');
     }
   } else {
@@ -299,6 +383,13 @@ function drawKnife(x, y, ang, len) {
 }
 function drawLog() {
   const { x, y, R } = log;
+  ctx.save();
+  if (log.squash > 0) {
+    const s = log.squash;
+    ctx.translate(x, y);
+    ctx.scale(1 + s * 0.07, 1 - s * 0.06);
+    ctx.translate(-x, -y);
+  }
   if (logGlow) ctx.drawImage(logGlow, x - logGlow.width / 2, y - logGlow.height / 2);
   const seg = TAU / log.segs;
   for (let i = 0; i < log.segs; i++) {
@@ -329,6 +420,7 @@ function drawLog() {
     ctx.beginPath(); ctx.arc(x, y, pr, 0, TAU); ctx.stroke();
     ctx.restore();
   }
+  ctx.restore();
 }
 let appleSpr = null;
 function buildAppleSprite() {
@@ -414,7 +506,7 @@ function loop(ts) {
   const dt = Math.min(0.05, (ts - last) / 1000 || 0.016);
   last = ts;
   update(dt);
-  draw();
+  if (running || pieces.length || particles.length || floaters.length) draw();
   requestAnimationFrame(loop);
 }
 
@@ -428,6 +520,10 @@ $('mute').addEventListener('click', () => { ensureAudio(); muted = !muted; $('mu
 
 resize();
 buildAppleSprite();
+loadEmblems();
+renderEmblems();
+renderApples();
+renderPerfect();
 $('mute').textContent = muted ? '🔇' : '🔊';
 requestAnimationFrame(loop);
 </script>

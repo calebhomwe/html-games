@@ -39,21 +39,40 @@
 <div class="overlay" id="start">
   <h1>STACK BALL</h1>
   <div class="sub">Tap to <b>smash down</b> through the rotating platforms — tap again mid-air to <b>slam</b> faster! Land on a <b style="color:#0a0a0f;background:#fff;padding:0 4px;border-radius:4px">black</b> segment = game over. Dodge the gaps & collect 💎 gems!</div>
+  <div class="sub" style="margin:-4px 0 0">🔥 Best slam streak: <b id="chainBestVal">0</b> · chain slams for +5 bonuses</div>
+  <div class="sub" style="margin:-4px 0 0">😅 Close calls: <b id="closeBestVal">0</b> · land right next to a black segment</div>
+  <div class="sub" style="margin:-4px 0 0">💎 Gems banked: <b id="gemTotalVal">0</b> · 📿 <b id="gemRankVal">Trinketeer</b> — bank gems to climb ranks</div>
+  <div class="sub" style="margin:-4px 0 0">🗼 Best depth: <b id="depthBestVal">0</b> · 🔥 <b id="dayStreakVal">0</b>d streak (best <b id="dayBestVal">0</b>)</div>
   <button id="playBtn">▶ PLAY</button>
 </div>
 <div class="overlay hidden" id="gameover">
   <h1>CRACKED!</h1>
   <div class="score-big" id="finalScore">0</div>
   <div class="best" id="finalBest">Best: 0</div>
+  <div class="best" id="finalChain">🔥 Best slam streak: 0</div>
+  <div class="best" id="finalClose">😅 Close calls: 0</div>
+  <div class="best" id="finalGems" style="color:#67e8f9">💎 Gems banked: 0 · 📿 Trinketeer</div>
+  <div class="best" id="finalDepth" style="color:#a78bfa">🗼 Best depth: 0 · 🔥 0d streak (best 0)</div>
   <button id="restartBtn">↻ PLAY AGAIN</button>
 </div>
 <script>
+
 'use strict';
 const KEY = 'stack-ball-best';
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const $ = id => document.getElementById(id);
-let W = 0, H = 0, DPR = 1;
+let W = 0, H = 0, DPR = 1, bgCan = null;
+function buildBg() {
+  bgCan = document.createElement('canvas');
+  bgCan.width = Math.max(1, Math.round(W * DPR));
+  bgCan.height = Math.max(1, Math.round(H * DPR));
+  const b = bgCan.getContext('2d');
+  b.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const g = b.createRadialGradient(W / 2, H * 0.4, 10, W / 2, H * 0.4, Math.max(W, H) * 0.8);
+  g.addColorStop(0, '#2a1c0c'); g.addColorStop(1, '#070a16');
+  b.fillStyle = g; b.fillRect(0, 0, W, H);
+}
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   W = window.innerWidth; H = window.innerHeight;
@@ -61,6 +80,7 @@ function resize() {
   canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   layout();
+  buildBg();
 }
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 80));
@@ -84,11 +104,49 @@ function beep(freq, dur, type, vol, slideTo) {
   o.start(t); o.stop(t + dur);
 }
 function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+const SFXP={};['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
+function sfx(n){if(muted)return;var a=SFXP[n];if(!a)return;try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}}
 
 const TAU = Math.PI * 2, SEGS = 8;
 const BLACK = '#0e1017';
 const SAFE = ['#22d3ee', '#a855f7', '#f472b6', '#facc15', '#34d399', '#38bdf8'];
 let GAP, rx, ry, ballR, cx, desired;
+let ballSpr = null, gemSpr = null, eliteSpr = null;
+function buildBallSprite() {
+  const pad = 26, S = Math.ceil((ballR + pad) * 2);
+  ballSpr = document.createElement('canvas');
+  ballSpr.width = S; ballSpr.height = S;
+  const x = ballSpr.getContext('2d');
+  const g = x.createRadialGradient(S / 2 - ballR * 0.3, S / 2 - ballR * 0.3, ballR * 0.1, S / 2, S / 2, ballR);
+  g.addColorStop(0, '#e0f2fe'); g.addColorStop(0.55, '#38bdf8'); g.addColorStop(1, '#0369a1');
+  x.shadowColor = '#38bdf8'; x.shadowBlur = 18;
+  x.fillStyle = g;
+  x.beginPath(); x.arc(S / 2, S / 2, ballR, 0, TAU); x.fill();
+  x.shadowBlur = 0;
+  x.fillStyle = 'rgba(255,255,255,.75)';
+  x.beginPath(); x.arc(S / 2 - ballR * 0.35, S / 2 - ballR * 0.4, ballR * 0.24, 0, TAU); x.fill();
+}
+function buildGemSprite() {
+  const pad = 20, S = (10 + pad) * 2;
+  gemSpr = document.createElement('canvas');
+  gemSpr.width = S; gemSpr.height = S;
+  const x = gemSpr.getContext('2d');
+  x.shadowColor = '#22d3ee'; x.shadowBlur = 14;
+  x.fillStyle = '#22d3ee';
+  x.beginPath(); x.moveTo(S / 2, S / 2 - 10); x.lineTo(S / 2 + 6, S / 2); x.lineTo(S / 2, S / 2 + 10); x.lineTo(S / 2 - 6, S / 2); x.closePath(); x.fill();
+}
+function buildEliteSprite() {
+  const pad = 20, S = (14 + pad) * 2;
+  eliteSpr = document.createElement('canvas');
+  eliteSpr.width = S; eliteSpr.height = S;
+  const x = eliteSpr.getContext('2d');
+  x.shadowColor = '#fcd34d'; x.shadowBlur = 16;
+  x.fillStyle = '#fcd34d';
+  x.beginPath(); x.moveTo(S / 2, S / 2 - 14); x.lineTo(S / 2 + 9, S / 2); x.lineTo(S / 2, S / 2 + 14); x.lineTo(S / 2 - 9, S / 2); x.closePath(); x.fill();
+  x.shadowBlur = 0;
+  x.fillStyle = 'rgba(255,255,255,.9)';
+  x.beginPath(); x.arc(S / 2 - 4, S / 2 - 6, 2.2, 0, TAU); x.fill();
+}
 function layout() {
   GAP = Math.min(W, H) * 0.19;
   rx = Math.min(W, H) * 0.42;
@@ -96,25 +154,58 @@ function layout() {
   ballR = Math.min(W, H) * 0.075;
   cx = W / 2;
   desired = H * 0.30;
+  buildBallSprite();
+  buildGemSprite();
+  buildEliteSprite();
 }
 
-let platforms = [], gems = [], particles = [], floaters = [], trail = [], rings = [];
+let platforms = [], gems = [], particles = [], floaters = [], trail = [], rings = [], visBuf = [];
+const GEM_TIERS = [[3, 'Trinketeer'], [10, 'Gem Helper'], [25, 'Gem Crafter'], [60, 'Gem Curator'], [120, 'Gem Connoisseur'], [200, 'Gem Hoarder'], [320, 'Gem Lord']];
+function gemRankOf(n) { let r = GEM_TIERS[0][1]; for (const g of GEM_TIERS) { if (n >= g[0]) r = g[1]; } return r; }
+let gemTotal = 0, gemRank = 'Trinketeer';
 let cur = 0, score = 0, best = 0, camY = 0;
 let phase = 'ready', by = 0, vy = 0, fallTarget = 0;
-let squash = 0, shake = 0, tGlobal = 0, slam = false;
+let squash = 0, shake = 0, tGlobal = 0, slam = false, slamChain = 0, slamChainBest = 0;
+let closeCalls = 0, closeBest = 0;
+let depthBest = 0, dayStreak = 0, dayBest = 0, dayLast = -1;
+try { depthBest = parseInt(localStorage.getItem('stack-ball-depth') || '0', 10) || 0; } catch (e) {}
+try { const j = JSON.parse(localStorage.getItem('sb-days') || 'null'); if (j) { dayStreak = j.s | 0; dayBest = j.b | 0; dayLast = j.d | -1; } } catch (e) {}
+function bumpDays() {
+  const today = Math.floor(Date.now() / 86400000);
+  if (dayLast === today) return;
+  if (dayLast === today - 1) dayStreak++; else dayStreak = 1;
+  dayLast = today;
+  if (dayStreak > dayBest) dayBest = dayStreak;
+  try { localStorage.setItem('sb-days', JSON.stringify({ d: today, s: dayStreak, b: dayBest })); } catch (e) {}
+  if (dayStreak === 3 || dayStreak === 7 || dayStreak === 30) { addFloater('🔥 ' + dayStreak + '-DAY STREAK!', cx, desired - 120, '#fcd34d'); sfx('levelup'); }
+}
 
 try { best = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) {}
+try { slamChainBest = parseInt(localStorage.getItem('stack-ball-chain') || '0', 10) || 0; } catch (e) {}
+try { closeBest = parseInt(localStorage.getItem('stack-ball-close') || '0', 10) || 0; } catch (e) {}
+try { gemTotal = parseInt(localStorage.getItem('stack-ball-gems') || '0', 10) || 0; } catch (e) {}
+gemRank = gemRankOf(gemTotal);
 
 function rand(a, b) { return a + Math.random() * (b - a); }
 function py(i) { return i * GAP - camY; }
 function ballRestY(i) { return i * GAP - ry - ballR; }
+const PMAX = 220, FMAX = 16, pFree = [], fFree = [];
 function burst(x, y, color, n, speed) {
   for (let i = 0; i < n; i++) {
+    let p = pFree.pop();
+    if (!p) { if (particles.length >= PMAX) return; p = {}; }
     const a = Math.random() * TAU, s = rand(speed * 0.3, speed);
-    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), t: 0, r: rand(2, 5), color });
+    p.x = x; p.y = y; p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s;
+    p.life = rand(0.3, 0.7); p.t = 0; p.r = rand(2, 5); p.color = color;
+    particles.push(p);
   }
 }
-function addFloater(text, x, y, color) { floaters.push({ text, x, y, t: 0, life: 0.9, color }); }
+function addFloater(text, x, y, color) {
+  let f = fFree.pop();
+  if (!f) { if (floaters.length >= FMAX) return; f = {}; }
+  f.text = text; f.x = x; f.y = y; f.t = 0; f.life = 0.9; f.color = color;
+  floaters.push(f);
+}
 
 function makeSegs(i) {
   const seg = [];
@@ -134,7 +225,12 @@ function topColor(p) {
   let a = (-Math.PI / 2 - p.rot) % TAU; if (a < 0) a += TAU;
   return p.segs[Math.floor(a / seg) % SEGS];
 }
-function nextSolid(i) { for (;;) { ensureWorld(i + 1); if (!platforms[i].gap) return i; i++; } }
+function platAt(i) { return platforms.length ? platforms[i - platforms[0].i] : undefined; }
+function trimWorld() {
+  while (platforms.length && platforms[0].i < cur - 24) platforms.shift();
+  while (gems.length && gems[0].i < cur - 24) gems.shift();
+}
+function nextSolid(i) { for (;;) { ensureWorld(i + 1); const p = platAt(i); if (p && !p.gap) return i; i++; } }
 
 function initWorld() {
   platforms = []; gems = []; particles = []; floaters = [];
@@ -142,18 +238,20 @@ function initWorld() {
   for (let i = 1; i < 90; i++) {
     if (Math.random() < 0.32) gems.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false });
   }
+  for (let i = 15; i < 90; i += 15) gems.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false, elite: true });
 }
 function ensureWorld(n) {
-  while (platforms.length <= n) {
-    const i = platforms.length;
+  while (platforms.length && platforms[platforms.length - 1].i <= n) {
+    const i = platforms[platforms.length - 1].i + 1;
     platforms.push(makePlatform(i));
     if (Math.random() < 0.32) gems.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false });
+    if (i % 15 === 0) gems.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false, elite: true });
   }
 }
 function startGame() {
   initWorld();
   trail = []; rings = []; slam = false;
-  cur = 0; score = 0; squash = 0; shake = 0; vy = 0;
+  cur = 0; score = 0; squash = 0; shake = 0; vy = 0; slamChain = 0; closeCalls = 0;
   by = ballRestY(0); camY = by - desired;
   phase = 'resting';
   updateHUD();
@@ -162,6 +260,10 @@ function startGame() {
   $('start').classList.add('hidden');
   $('gameover').classList.add('hidden');
   floaters.push({ text: 'TAP TO SMASH!', x: cx, y: desired - ballR - 26, t: 0, life: 2.4, color: '#fcd34d' });
+  bumpDays();
+  $('dayStreakVal').textContent = dayStreak;
+  $('dayBestVal').textContent = dayBest;
+  $('depthBestVal').textContent = depthBest;
 }
 function updateHUD() {
   $('score').textContent = score;
@@ -173,6 +275,12 @@ function endGame() {
   if (nb) { best = score; try { localStorage.setItem(KEY, String(best)); } catch (e) {} }
   $('finalScore').textContent = score;
   $('finalBest').textContent = 'Best: ' + best + (nb ? '  🎉 NEW!' : '');
+  $('finalChain').textContent = '🔥 Best slam streak: ' + slamChainBest;
+  try { localStorage.setItem('stack-ball-chain', String(slamChainBest)); } catch (e) {}
+  $('finalClose').textContent = '😅 Close calls: ' + closeBest;
+  try { localStorage.setItem('stack-ball-close', String(closeBest)); } catch (e) {}
+  $('finalGems').textContent = '💎 Gems banked: ' + gemTotal + ' · 📿 ' + gemRank;
+  $('finalDepth').textContent = '🗼 Best depth: ' + depthBest + ' · 🔥 ' + dayStreak + 'd streak (best ' + dayBest + ')';
   $('gameover').classList.remove('hidden');
 }
 function die() {
@@ -183,43 +291,78 @@ function die() {
   burst(cx, sy, '#e2e8f0', 18, 260);
   shake = 16;
   buzz(60);
-  beep(120, 0.5, 'sawtooth', 0.26, 40);
-  beep(65, 0.6, 'square', 0.2, 30);
+  sfx('lose');
   setTimeout(endGame, 520);
 }
 function shatter(i) {
-  const p = platforms[i]; if (!p || p.broken) return;
+  const p = platAt(i); if (!p || p.broken) return;
   p.broken = true;
   const sy = py(i);
   for (let n = 0; n < 16; n++) {
+    let q = pFree.pop();
+    if (!q) { if (particles.length >= PMAX) break; q = {}; }
     const a = Math.random() * TAU;
-    particles.push({ x: cx + Math.cos(a) * rx * Math.random(), y: sy - ry + Math.random() * ry * 2, vx: Math.cos(a) * rand(60, 280), vy: Math.sin(a) * rand(60, 280) - 60, life: rand(0.3, 0.65), t: 0, r: rand(2, 6), color: p.segs[(Math.random() * SEGS) | 0] || '#64748b' });
+    q.x = cx + Math.cos(a) * rx * Math.random();
+    q.y = sy - ry + Math.random() * ry * 2;
+    q.vx = Math.cos(a) * rand(60, 280);
+    q.vy = Math.sin(a) * rand(60, 280) - 60;
+    q.life = rand(0.3, 0.65); q.t = 0; q.r = rand(2, 6);
+    q.color = p.segs[(Math.random() * SEGS) | 0] || '#64748b';
+    particles.push(q);
   }
   shake = Math.max(shake, 4);
 }
 function resolveLanding() {
   ensureWorld(fallTarget + 20);
-  const p = platforms[fallTarget];
+  const p = platAt(fallTarget);
   const c = topColor(p);
   if (c === BLACK) { die(); return; }
+  const segA = TAU / SEGS;
+  const aC0 = (-Math.PI / 2 - p.rot) % TAU;
+  const k0 = Math.floor((aC0 < 0 ? aC0 + TAU : aC0) / segA) % SEGS;
+  if (p.segs[(k0 + 1) % SEGS] === BLACK || p.segs[(k0 - 1 + SEGS) % SEGS] === BLACK) {
+    closeCalls++;
+    if (closeCalls > closeBest) closeBest = closeCalls;
+    addFloater('😅 CLOSE CALL!', cx, desired - 70, '#fda4af');
+    sfx('whoosh');
+    buzz(10);
+    if (closeCalls % 5 === 0) { addFloater('😅 ' + closeCalls + ' CLOSE CALLS!', cx, desired - 96, '#fda4af'); sfx('levelup'); }
+  }
   score += 1;
   addFloater('+1', cx, by - camY - 34, '#fde68a');
-  beep(380 + Math.min(cur, 50) * 5, 0.12, 'triangle', 0.16, 760);
+  sfx('hit');
   buzz(12);
   cur = fallTarget;
-  if (slam) { shake = Math.max(shake, 7); beep(240, 0.1, 'square', 0.14, 110); burst(cx, by - camY + ballR, '#fb923c', 14, 260); rings.push({ y: by - camY + ballR, t: 0 }); }
+  if (slam) { shake = Math.max(shake, 7); sfx('boom'); burst(cx, by - camY + ballR, '#fb923c', 14, 260); rings.push({ y: by - camY + ballR, t: 0 }); }
+  if (slam) {
+    slamChain++;
+    if (slamChain > slamChainBest) slamChainBest = slamChain;
+    if (slamChain % 5 === 0) {
+      score += 5;
+      addFloater('🔥 ' + slamChain + ' SLAM STREAK! +5', cx, desired - 96, '#fbbf24');
+      sfx('levelup');
+      shake = Math.max(shake, 5);
+    }
+  } else {
+    slamChain = 0;
+  }
   slam = false;
   phase = 'resting';
   vy = 0;
   squash = 1;
   trail = [];
   burst(cx, by - camY + ballR, '#fcd34d', 10, 180);
+  rings.push({ y: by - camY + ballR, t: 0, col: '#fcd34d' });
   shake = Math.max(shake, 2);
   if (cur > 0 && cur % 10 === 0) {
     addFloater('DEPTH ' + cur + '!', cx, desired - 60, '#fbbf24');
-    beep(523, 0.12, 'triangle', 0.2, 1046);
-    beep(784, 0.18, 'triangle', 0.16, 1568);
+    sfx('levelup');
     shake = Math.max(shake, 5);
+  }
+  if (cur > depthBest) {
+    depthBest = cur;
+    try { localStorage.setItem('stack-ball-depth', String(depthBest)); } catch (e) {}
+    if (cur > 5) { addFloater('🗼 NEW DEPTH ' + cur + '!', cx, desired - 120, '#a78bfa'); sfx('levelup'); }
   }
   updateHUD();
 }
@@ -228,9 +371,10 @@ function update(dt) {
   tGlobal += dt;
   if (shake > 0) shake = Math.max(0, shake - 60 * dt);
   if (squash > 0) squash = Math.max(0, squash - 6 * dt);
-  for (let i = 0; i < platforms.length; i++) { if (!platforms[i].broken && !platforms[i].gap) platforms[i].rot += platforms[i].rs * dt; }
+  for (const p of platforms) { if (!p.broken && !p.gap) p.rot += p.rs * dt; }
 
   if (phase === 'resting') {
+    trimWorld();
     by = ballRestY(cur);
     camY += (by - desired - camY) * Math.min(1, 10 * dt);
   } else if (phase === 'falling') {
@@ -254,9 +398,21 @@ function update(dt) {
         score += 3;
         const gx = cx + gm.off, gsy = gwy - camY;
         addFloater('+3 💎', gx, gsy, '#67e8f9');
-        beep(1200, 0.15, 'sine', 0.18, 1600);
+        sfx('coin');
         buzz(14);
         burst(gx, gsy, '#67e8f9', 10, 180);
+        rings.push({ y: gsy, t: 0, col: '#67e8f9' });
+        gemTotal++;
+        try { localStorage.setItem('stack-ball-gems', String(gemTotal)); } catch (e) {}
+        const gr = gemRankOf(gemTotal);
+        if (gr !== gemRank) { gemRank = gr; addFloater('🏅 ' + gemRank + '!', gx, gsy - 56, '#fcd34d'); sfx('levelup'); }
+        if (gm.elite) {
+          score += 15;
+          addFloater('+15 ✨', gx, gsy - 30, '#fcd34d');
+          sfx('boom');
+          burst(gx, gsy, '#fcd34d', 16, 260);
+          rings.push({ y: gsy, t: 0, col: '#fcd34d' });
+        }
         updateHUD();
       }
     }
@@ -265,12 +421,12 @@ function update(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 520 * dt; p.vx *= 0.98;
-    if (p.t >= p.life) particles.splice(i, 1);
+    if (p.t >= p.life) { pFree.push(p); particles[i] = particles[particles.length - 1]; particles.pop(); }
   }
   for (let i = floaters.length - 1; i >= 0; i--) {
     const f = floaters[i];
     f.t += dt; f.y -= 42 * dt;
-    if (f.t >= f.life) floaters.splice(i, 1);
+    if (f.t >= f.life) { fFree.push(f); floaters[i] = floaters[floaters.length - 1]; floaters.pop(); }
   }
   for (let i = rings.length - 1; i >= 0; i--) {
     rings[i].t += dt;
@@ -284,15 +440,14 @@ function drawPlatform(p, sy) {
   ctx.beginPath(); ctx.ellipse(cx, sy + ry * 0.18, rx, ry, 0, 0, TAU); ctx.fill();
   for (let k = 0; k < SEGS; k++) {
     const col = p.segs[k];
+    const a0 = p.rot + k * seg, a1 = p.rot + (k + 1) * seg;
+    if (col !== BLACK) {
+      ctx.globalAlpha = 0.3; ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(cx, sy); ctx.ellipse(cx, sy, rx + 6, ry + 6, 0, a0, a1); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = col;
-    if (col === BLACK) { ctx.shadowBlur = 0; }
-    else { ctx.shadowColor = col; ctx.shadowBlur = 10; }
-    ctx.beginPath();
-    ctx.moveTo(cx, sy);
-    ctx.ellipse(cx, sy, rx, ry, 0, p.rot + k * seg, p.rot + (k + 1) * seg);
-    ctx.closePath();
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.moveTo(cx, sy); ctx.ellipse(cx, sy, rx, ry, 0, a0, a1); ctx.closePath(); ctx.fill();
   }
   ctx.strokeStyle = 'rgba(255,255,255,.15)'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.ellipse(cx, sy, rx, ry, 0, 0, TAU); ctx.stroke();
@@ -301,9 +456,16 @@ function drawGem(x, y) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(tGlobal * 1.5);
-  ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 14;
-  ctx.fillStyle = '#22d3ee';
-  ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(6, 0); ctx.lineTo(0, 10); ctx.lineTo(-6, 0); ctx.closePath(); ctx.fill();
+  ctx.drawImage(gemSpr, -gemSpr.width / 2, -gemSpr.height / 2);
+  ctx.restore();
+}
+function drawEliteGem(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tGlobal * 2.2);
+  const k = 1 + Math.sin(tGlobal * 5) * 0.08;
+  ctx.scale(k, k);
+  ctx.drawImage(eliteSpr, -eliteSpr.width / 2, -eliteSpr.height / 2);
   ctx.restore();
 }
 function drawBall() {
@@ -323,19 +485,11 @@ function drawBall() {
   let sx = 1 + squash * 0.3, syy = 1 - squash * 0.35;
   if (phase === 'falling') { const k = Math.min(0.22, Math.max(0, vy) / (GAP * 16)); sx -= k; syy += k; }
   ctx.scale(sx, syy);
-  const g = ctx.createRadialGradient(-ballR * 0.3, -ballR * 0.3, ballR * 0.1, 0, 0, ballR);
-  g.addColorStop(0, '#e0f2fe'); g.addColorStop(0.55, '#38bdf8'); g.addColorStop(1, '#0369a1');
-  ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 18;
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, ballR, 0, TAU); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = 'rgba(255,255,255,.75)';
-  ctx.beginPath(); ctx.arc(-ballR * 0.35, -ballR * 0.4, ballR * 0.24, 0, TAU); ctx.fill();
+  ctx.drawImage(ballSpr, -ballSpr.width / 2, -ballSpr.height / 2);
   ctx.restore();
 }
 function draw() {
-  const g = ctx.createRadialGradient(W / 2, H * 0.4, 10, W / 2, H * 0.4, Math.max(W, H) * 0.8);
-  g.addColorStop(0, '#2a1c0c'); g.addColorStop(1, '#070a16');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(bgCan, 0, 0, W, H);
   ctx.fillStyle = 'rgba(251,191,36,.05)';
   ctx.fillRect(cx - rx - 18, 0, 12, H);
   ctx.fillRect(cx + rx + 6, 0, 12, H);
@@ -343,15 +497,18 @@ function draw() {
   ctx.save();
   if (shake > 0) ctx.translate(rand(-shake, shake) * 0.5, rand(-shake, shake) * 0.5);
 
-  const vis = [];
-  for (const p of platforms) { if (p.broken || p.gap) continue; const sy = py(p.i); if (sy > -3 * GAP && sy < H + 3 * GAP) vis.push({ p, sy }); }
-  vis.sort((a, b) => a.sy - b.sy);
-  for (const v of vis) drawPlatform(v.p, v.sy);
+  visBuf.length = 0;
+  for (const p of platforms) { if (p.broken || p.gap) continue; const sy = py(p.i); if (sy > -3 * GAP && sy < H + 3 * GAP) visBuf.push({ p, sy }); }
+  visBuf.sort((a, b) => a.sy - b.sy);
+  for (const v of visBuf) drawPlatform(v.p, v.sy);
 
   for (const gm of gems) {
     if (gm.collected) continue;
     const sy = gm.i * GAP - ry - ballR * 0.5 - camY;
-    if (sy > -60 && sy < H + 60) drawGem(cx + gm.off, sy);
+    if (sy > -60 && sy < H + 60) {
+      if (gm.elite) drawEliteGem(cx + gm.off, sy + Math.sin(tGlobal * 3) * 3);
+      else drawGem(cx + gm.off, sy);
+    }
   }
 
   if (phase !== 'dying') drawBall();
@@ -359,7 +516,7 @@ function draw() {
   for (const rg of rings) {
     const k = rg.t / 0.34;
     ctx.globalAlpha = (1 - k) * 0.7;
-    ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 3 * (1 - k) + 1;
+    ctx.strokeStyle = rg.col || '#fb923c'; ctx.lineWidth = 3 * (1 - k) + 1;
     ctx.beginPath(); ctx.ellipse(cx, rg.y, rx * (0.3 + 0.9 * k), ry * (0.3 + 0.9 * k), 0, 0, TAU); ctx.stroke();
   }
   ctx.globalAlpha = 1;
@@ -396,7 +553,7 @@ function tap(e) {
   ensureAudio();
   if (phase === 'resting') {
     shatter(cur);
-    beep(200, 0.08, 'square', 0.08);
+    sfx('hit');
     buzz(8);
     fallTarget = nextSolid(cur + 1);
     vy = 0;
@@ -405,7 +562,7 @@ function tap(e) {
   } else if (phase === 'falling' && !slam) {
     slam = true;
     vy = Math.max(vy, GAP * 13);
-    beep(160, 0.09, 'square', 0.1, 80);
+    sfx('whoosh');
     buzz(10);
   }
 }
@@ -421,6 +578,13 @@ initWorld();
 by = ballRestY(0); camY = by - desired;
 $('mute').textContent = muted ? '🔇' : '🔊';
 updateHUD();
+$('chainBestVal').textContent = slamChainBest;
+$('closeBestVal').textContent = closeBest;
+$('gemTotalVal').textContent = gemTotal;
+$('gemRankVal').textContent = gemRank;
+$('depthBestVal').textContent = depthBest;
+$('dayStreakVal').textContent = dayStreak;
+$('dayBestVal').textContent = dayBest;
 requestAnimationFrame(loop);
 </script>
 </body>

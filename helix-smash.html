@@ -32,22 +32,26 @@
 <div class="hud hidden" id="hud">
   <div class="pill"><small>Score</small><span id="score">0</span></div>
   <div class="pill"><small>Combo</small><span id="combo">&mdash;</span></div>
+  <div class="pill"><small>Gems</small><span id="gems">0</span></div>
   <div class="pill"><small>Best</small><span id="best">0</span></div>
 </div>
 <div class="topbtns hidden" id="topbtns"><button class="iconbtn" id="mute">🔊</button></div>
 <a id="hub" href="../index.html">← Hub</a>
 <div class="overlay" id="start">
   <h1>HELIX SMASH</h1>
-  <div class="sub">Tap to <b>smash</b> through the platform below. <b style="color:#60a5fa">Blue/purple</b> break &rarr; <b style="color:#4ade80">green</b> bounces (combo!) &middot; <b style="color:#f87171">red/orange</b> = game over. Grab 💎 gems.</div>
+  <div class="sub">Tap to <b>smash</b> through the platform below. <b style="color:#60a5fa">Blue/purple</b> break &rarr; <b style="color:#4ade80">green</b> bounces (combo!) &middot; <b style="color:#f87171">red/orange</b> = game over. Grab 💎 gems &amp; 💍 golden rings. 🧲 magnets vacuum gems toward you!</div>
+  <div class="best" id="ringInfo">💍 Golden Rings Ever: 0</div>
   <button id="playBtn">▶ PLAY</button>
 </div>
 <div class="overlay hidden" id="gameover">
   <h1>SHATTERED!</h1>
   <div class="score-big" id="finalScore">0</div>
   <div class="best" id="finalBest">Best: 0</div>
+  <div class="best" id="comboInfo">Best Combo: ×0</div>
   <button id="restartBtn">↻ PLAY AGAIN</button>
 </div>
 <script>
+
 'use strict';
 const KEY = 'helix-smash-best';
 const canvas = document.getElementById('c');
@@ -95,11 +99,13 @@ function beep(freq, dur, type, vol, slideTo) {
   o.start(t); o.stop(t + dur);
 }
 function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+const SFXP={};['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
+function sfx(n){if(muted)return;var a=SFXP[n];if(!a)return;try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}}
 
 const TAU = Math.PI * 2, SEGS = 8;
 const COLORS = { red:'#ef4444', orange:'#f97316', blue:'#3b82f6', purple:'#8b5cf6', green:'#22c55e' };
 let GAP, rx, ry, ringHalf, ballR, cx, desired;
-let ballSpr = null, gemSpr = null;
+let ballSpr = null, gemSpr = null, shieldSpr = null, ringSpr = null, magSpr = null;
 function buildBallSprite() {
   const pad = 26, S = Math.ceil(ballR + pad) * 2;
   ballSpr = document.createElement('canvas');
@@ -123,6 +129,44 @@ function buildGemSprite() {
   x.fillStyle = '#22d3ee';
   x.beginPath(); x.moveTo(S/2, S/2 - 10); x.lineTo(S/2 + 6, S/2); x.lineTo(S/2, S/2 + 10); x.lineTo(S/2 - 6, S/2); x.closePath(); x.fill();
 }
+function buildRingSprite() {
+  const pad = 20, S = (10 + pad) * 2;
+  ringSpr = document.createElement('canvas');
+  ringSpr.width = S; ringSpr.height = S;
+  const x = ringSpr.getContext('2d');
+  x.shadowColor = '#fbbf24'; x.shadowBlur = 14;
+  x.strokeStyle = '#fbbf24'; x.lineWidth = 4;
+  x.beginPath(); x.arc(S/2, S/2, 7, 0, TAU); x.stroke();
+  x.shadowBlur = 0;
+  x.fillStyle = '#fff7e0';
+  x.beginPath(); x.arc(S/2 + 4, S/2 - 6, 2, 0, TAU); x.fill();
+}
+function buildShieldSprite() {
+  const pad = 20, S = (10 + pad) * 2;
+  shieldSpr = document.createElement('canvas');
+  shieldSpr.width = S; shieldSpr.height = S;
+  const x = shieldSpr.getContext('2d');
+  x.shadowColor = '#22d3ee'; x.shadowBlur = 14;
+  x.fillStyle = '#22d3ee';
+  x.beginPath(); x.moveTo(S/2, S/2 - 10); x.lineTo(S/2 + 8, S/2 - 2); x.lineTo(S/2 + 5, S/2 + 9); x.lineTo(S/2, S/2 + 11); x.lineTo(S/2 - 5, S/2 + 9); x.lineTo(S/2 - 8, S/2 - 2); x.closePath(); x.fill();
+  x.fillStyle = 'rgba(255,255,255,.7)';
+  x.beginPath(); x.arc(S/2 - 3, S/2 - 5, 2, 0, TAU); x.fill();
+}
+function buildMagSprite() {
+  const pad = 20, S = (10 + pad) * 2;
+  magSpr = document.createElement('canvas');
+  magSpr.width = S; magSpr.height = S;
+  const x = magSpr.getContext('2d');
+  x.shadowColor = '#f472b6'; x.shadowBlur = 14;
+  x.strokeStyle = '#f472b6'; x.lineWidth = 5;
+  x.beginPath(); x.arc(S/2, S/2, 8, Math.PI, 0); x.stroke();
+  x.shadowBlur = 0;
+  x.fillStyle = '#f9a8d4';
+  x.fillRect(S/2 - 10.5, S/2 - 1, 5, 8);
+  x.fillRect(S/2 + 5.5, S/2 - 1, 5, 8);
+  x.fillStyle = '#fde68a';
+  x.beginPath(); x.arc(S/2 - 3, S/2 - 8, 2, 0, TAU); x.fill();
+}
 function layout() {
   GAP = Math.min(W, H) * 0.20;
   rx = Math.min(W, H) * 0.42;
@@ -132,14 +176,21 @@ function layout() {
   cx = W / 2;
   desired = H * 0.32;
   buildBallSprite();
+  buildGemSprite();
+  buildShieldSprite();
+  buildRingSprite();
+  buildMagSprite();
 }
 
-let platforms = [], gems = [], particles = [], floaters = [], trail = [];
-let cur = 0, combo = 0, score = 0, best = 0, camY = 0;
+let platforms = [], gems = [], powerups = [], goldPus = [], mags = [], particles = [], floaters = [], trail = [], visBuf = [], rings = [];
+let cur = 0, combo = 0, score = 0, best = 0, camY = 0, shield = 0, fever = 0, ringGot = 0, ringBest = 0, magnet = 0;
 let phase = 'ready', by = 0, vy = 0, fallTarget = 0;
 let squash = 0, shake = 0, tGlobal = 0;
 
 try { best = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) {}
+try { ringBest = parseInt(localStorage.getItem(KEY + '-rings') || '0', 10) || 0; } catch (e) {}
+let comboRec = 0, runComboBest = 0, recCeleb = false;
+try { comboRec = parseInt(localStorage.getItem(KEY + '-combo') || '0', 10) || 0; } catch (e) {}
 
 function rand(a, b) { return a + Math.random() * (b - a); }
 function py(i) { return i * GAP - camY; }
@@ -161,10 +212,17 @@ function addFloater(text, x, y, color) {
   f.text = text; f.x = x; f.y = y; f.t = 0; f.life = 0.9; f.color = color;
   floaters.push(f);
 }
+function addRing(x, y, color) {
+  if (rings.length >= 24) rings.shift();
+  rings.push({ x, y, t: 0, color });
+}
 function platAt(i) { return platforms.length ? platforms[i - platforms[0].i] : undefined; }
 function trimWorld() {
   while (platforms.length && platforms[0].i < cur - 24) platforms.shift();
   while (gems.length && gems[0].i < cur - 24) gems.shift();
+  while (powerups.length && powerups[0].i < cur - 24) powerups.shift();
+  while (goldPus.length && goldPus[0].i < cur - 24) goldPus.shift();
+  while (mags.length && mags[0].i < cur - 24) mags.shift();
 }
 
 function makeSegs(i) {
@@ -187,23 +245,29 @@ function topColor(p) {
 }
 
 function initWorld() {
-  platforms = []; gems = []; particles = []; floaters = [];
+  platforms = []; gems = []; powerups = []; goldPus = []; mags = []; particles = []; floaters = [];
   for (let i = 0; i < 90; i++) platforms.push(makePlatform(i));
   for (let i = 1; i < 90; i++) {
     if (Math.random() < 0.35) gems.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false });
+    if (Math.random() < 0.05) powerups.push({ i, off: 0, collected: false });
+    if (Math.random() < 0.04 && !powerups.some(u => u.i === i)) goldPus.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false });
+    if (Math.random() < 0.025 && !powerups.some(u => u.i === i) && !goldPus.some(u => u.i === i)) mags.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false });
   }
 }
 function ensureWorld(n) {
-  while (platforms.length <= n) {
-    const i = platforms.length;
+  while (platforms.length && platforms[platforms.length - 1].i <= n) {
+    const i = platforms[platforms.length - 1].i + 1;
     platforms.push(makePlatform(i));
     if (Math.random() < 0.35) gems.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false });
+    if (Math.random() < 0.05) powerups.push({ i, off: 0, collected: false });
+    if (Math.random() < 0.04 && !powerups.some(u => u.i === i)) goldPus.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false });
+    if (Math.random() < 0.025 && !powerups.some(u => u.i === i) && !goldPus.some(u => u.i === i)) mags.push({ i, off: rand(-ballR * 0.85, ballR * 0.85), collected: false });
   }
 }
 function startGame() {
   initWorld();
-  trail = [];
-  cur = 0; combo = 0; score = 0; squash = 0; shake = 0; vy = 0;
+  trail = []; rings = [];
+  cur = 0; combo = 0; score = 0; squash = 0; shake = 0; vy = 0; shield = 0; fever = 0; ringGot = 0; runComboBest = 0; recCeleb = false; magnet = 0;
   by = ballRestY(0); camY = by - desired;
   phase = 'resting';
   updateHUD();
@@ -223,6 +287,13 @@ function endGame() {
   if (nb) { best = score; try { localStorage.setItem(KEY, String(best)); } catch (e) {} }
   $('finalScore').textContent = score;
   $('finalBest').textContent = 'Best: ' + best + (nb ? '  🎉 NEW!' : '');
+  const nr = runComboBest >= 2 && runComboBest > comboRec;
+  if (nr) {
+    comboRec = runComboBest;
+    try { localStorage.setItem(KEY + '-combo', String(comboRec)); } catch (e) {}
+    sfx('win');
+  }
+  $('comboInfo').textContent = 'Best Combo: ×' + comboRec + (nr ? '  🏆 NEW!' : '');
   $('gameover').classList.remove('hidden');
 }
 function die() {
@@ -233,8 +304,7 @@ function die() {
   burst(cx, sy, '#fbbf24', 18, 260);
   shake = 16;
   buzz(60);
-  beep(130, 0.5, 'sawtooth', 0.26, 40);
-  beep(70, 0.6, 'square', 0.2, 30);
+  sfx('lose');
   setTimeout(endGame, 520);
 }
 function shatter(i) {
@@ -256,21 +326,45 @@ function resolveLanding() {
   ensureWorld(fallTarget + 20);
   const p = platAt(fallTarget);
   const c = topColor(p);
-  if (c === 'red' || c === 'orange') { die(); return; }
+  if (c === 'red' || c === 'orange') {
+    if (shield > 0) {
+      shield--;
+      addFloater('🛡 BLOCKED!', cx, by - camY - 34, '#22d3ee');
+      sfx('hit');
+      buzz(18);
+      shatter(fallTarget);
+      fallTarget++;
+      vy = -GAP * 5;
+      squash = 1;
+      updateHUD();
+      return;
+    }
+    die(); return;
+  }
   if (c === 'green') {
     combo++;
     score += combo;
+    fever = 0;
+    if (combo > runComboBest) runComboBest = combo;
+    if (combo >= 2 && combo > comboRec && !recCeleb) {
+      recCeleb = true;
+      addFloater('🏆 NEW COMBO RECORD ×' + combo, cx, by - camY - 80, '#fde68a');
+      sfx('levelup');
+      buzz(20);
+    }
     addFloater('+' + combo + ' COMBO', cx, by - camY - 34, '#4ade80');
-    beep(520 + combo * 90, 0.12, 'triangle', 0.18, 1300);
+    sfx('jump');
     buzz(18);
     shatter(fallTarget);
     fallTarget++;
     vy = -GAP * 5;
     updateHUD();
   } else {
-    score += 1 + combo;
-    addFloater('+' + (1 + combo), cx, by - camY - 34, '#93c5fd');
-    beep(360 + combo * 40, 0.12, 'triangle', 0.16, 800);
+    fever = Math.min(9, fever + 1);
+    const fb = fever >= 3 ? fever * 2 : 0;
+    score += 1 + combo + fb;
+    addFloater(fb > 0 ? '+' + (1 + combo + fb) + ' 🔥' : '+' + (1 + combo), cx, by - camY - 34, fb > 0 ? '#fbbf24' : '#93c5fd');
+    sfx('hit');
     buzz(12);
     cur = fallTarget;
     combo = 0;
@@ -279,6 +373,7 @@ function resolveLanding() {
     squash = 1;
     trail = [];
     burst(cx, by - camY + ballR, '#7dd3fc', 8, 160);
+    addRing(cx, by - camY + ballR, '#7dd3fc');
     shake = Math.max(shake, 2);
     updateHUD();
   }
@@ -288,9 +383,11 @@ function update(dt) {
   tGlobal += dt;
   if (shake > 0) shake = Math.max(0, shake - 60 * dt);
   if (squash > 0) squash = Math.max(0, squash - 6 * dt);
-  for (let i = 0; i < platforms.length; i++) { if (!platforms[i].broken) platforms[i].rot += platforms[i].rs * dt; }
+  if (magnet > 0) magnet = Math.max(0, magnet - dt);
+  for (const p of platforms) { if (!p.broken) p.rot += p.rs * dt; }
 
   if (phase === 'resting') {
+    trimWorld();
     by = ballRestY(cur);
     camY += (by - desired - camY) * Math.min(1, 10 * dt);
   } else if (phase === 'falling') {
@@ -314,10 +411,69 @@ function update(dt) {
         score += 5;
         const gx = cx + gm.off, gsy = gwy - camY;
         addFloater('+5 💎', gx, gsy, '#67e8f9');
-        beep(1200, 0.15, 'sine', 0.18, 1600);
+        sfx('coin');
         buzz(14);
         burst(gx, gsy, '#67e8f9', 10, 180);
+        addRing(gx, gsy, '#67e8f9');
         updateHUD();
+      }
+    }
+    for (const pu of powerups) {
+      if (pu.collected) continue;
+      const pwy = pu.i * GAP - ry - ringHalf - ballR;
+      if (Math.hypot(pu.off, pwy - by) < ballR + 18) {
+        pu.collected = true;
+        shield = Math.min(3, shield + 1);
+        const px = cx + pu.off, psy = pwy - camY;
+        addFloater('🛡 +1 SHIELD', px, psy, '#67e8f9');
+        sfx('levelup');
+        buzz(14);
+        burst(px, psy, '#22d3ee', 10, 180);
+      }
+    }
+    for (const gp of goldPus) {
+      if (gp.collected) continue;
+      const pwy = gp.i * GAP - ry - ringHalf - ballR;
+      if (Math.hypot(gp.off, pwy - by) < ballR + 18) {
+        gp.collected = true;
+        ringGot++;
+        score += 10;
+        const px = cx + gp.off, psy = pwy - camY;
+        addFloater('+10 💍', px, psy, '#fde68a');
+        sfx('coin');
+        buzz(16);
+        burst(px, psy, '#fbbf24', 12, 190);
+        addRing(px, psy, '#fde68a');
+        const nc = ringGot > ringBest;
+        if (nc) { ringBest = ringGot; try { localStorage.setItem(KEY + '-rings', String(ringBest)); } catch (e) {} }
+        if (nc) { addFloater('🏆 NEW RING RECORD!', cx, psy - 84, '#fde68a'); sfx('levelup'); }
+        else if (ringGot % 5 === 0) { addFloater('💍 RING COLLECTOR ×' + ringGot, cx, psy - 84, '#fde68a'); sfx('levelup'); }
+        updateHUD();
+      }
+    }
+    for (const mg of mags) {
+      if (mg.collected) continue;
+      const pwy = mg.i * GAP - ry - ringHalf - ballR;
+      if (Math.hypot(mg.off, pwy - by) < ballR + 18) {
+        mg.collected = true;
+        magnet = Math.min(12, magnet + 6);
+        const px = cx + mg.off, psy = pwy - camY;
+        addFloater('🧲 MAGNET +6s', px, psy, '#f9a8d4');
+        sfx('levelup');
+        buzz(14);
+        burst(px, psy, '#f472b6', 12, 190);
+        addRing(px, psy, '#f9a8d4');
+      }
+    }
+    if (magnet > 0) {
+      const pullR = ballR * 6;
+      for (const gm of gems) {
+        if (gm.collected) continue;
+        const gwy = gm.i * GAP - ry - ringHalf - ballR;
+        const dx = (cx + gm.off) - cx, dy = gwy - by;
+        if (Math.hypot(dx, dy) < pullR) {
+          gm.off -= dx * Math.min(1, 8 * dt);
+        }
       }
     }
   }
@@ -325,12 +481,16 @@ function update(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 500 * dt; p.vx *= 0.98;
-    if (p.t >= p.life) particles.splice(i, 1);
+    if (p.t >= p.life) { pFree.push(p); particles[i] = particles[particles.length - 1]; particles.pop(); }
   }
   for (let i = floaters.length - 1; i >= 0; i--) {
     const f = floaters[i];
     f.t += dt; f.y -= 42 * dt;
-    if (f.t >= f.life) floaters.splice(i, 1);
+    if (f.t >= f.life) { fFree.push(f); floaters[i] = floaters[floaters.length - 1]; floaters.pop(); }
+  }
+  for (let i = rings.length - 1; i >= 0; i--) {
+    rings[i].t += dt;
+    if (rings[i].t > 0.32) { rings[i] = rings[rings.length - 1]; rings.pop(); }
   }
 }
 
@@ -340,15 +500,17 @@ function drawPlatform(p, sy) {
   for (let k = 0; k < SEGS; k++) {
     const col = p.segs[k];
     const c = COLORS[col] || '#64748b';
+    const a0 = p.rot + k * seg, a1 = a0 + seg - 0.06;
+    if (col === 'green' || col === 'red' || col === 'orange') {
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = c;
+      ctx.lineWidth = ry * 1.4 + 11;
+      ctx.beginPath(); ctx.ellipse(cx, sy, rx, ry, 0, a0, a1); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     ctx.strokeStyle = c;
     ctx.lineWidth = ry * 1.4;
-    if (col === 'green') { ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 14; }
-    else if (col === 'red' || col === 'orange') { ctx.shadowColor = c; ctx.shadowBlur = 10; }
-    else { ctx.shadowBlur = 0; }
-    ctx.beginPath();
-    ctx.ellipse(cx, sy, rx, ry, 0, p.rot + k * seg, p.rot + k * seg + seg - 0.06);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.ellipse(cx, sy, rx, ry, 0, a0, a1); ctx.stroke();
   }
   ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.ellipse(cx, sy, rx, ry, 0, 0, TAU); ctx.stroke();
@@ -357,9 +519,32 @@ function drawGem(x, y) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(tGlobal * 1.5);
-  ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 14;
-  ctx.fillStyle = '#22d3ee';
-  ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(6, 0); ctx.lineTo(0, 10); ctx.lineTo(-6, 0); ctx.closePath(); ctx.fill();
+  ctx.drawImage(gemSpr, -gemSpr.width / 2, -gemSpr.height / 2);
+  ctx.restore();
+}
+function drawShield(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tGlobal * 1.5 + Math.PI * 0.25);
+  ctx.drawImage(shieldSpr, -shieldSpr.width / 2, -shieldSpr.height / 2);
+  ctx.restore();
+}
+function drawRing(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tGlobal * 2.2 + Math.PI * 0.4);
+  ctx.drawImage(ringSpr, -ringSpr.width / 2, -ringSpr.height / 2);
+  if (Math.floor(tGlobal * 4) % 2 === 0) {
+    ctx.fillStyle = 'rgba(253,230,138,.9)';
+    ctx.beginPath(); ctx.arc(10 * Math.sin(tGlobal * 3), 0, 2, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawMag(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tGlobal * 1.2);
+  ctx.drawImage(magSpr, -magSpr.width / 2, -magSpr.height / 2);
   ctx.restore();
 }
 function drawBall() {
@@ -377,19 +562,27 @@ function drawBall() {
   ctx.save();
   ctx.translate(cx, sy);
   ctx.scale(1 + squash * 0.3, 1 - squash * 0.35);
-  const g = ctx.createRadialGradient(-ballR * 0.3, -ballR * 0.3, ballR * 0.1, 0, 0, ballR);
-  g.addColorStop(0, '#fbbf24'); g.addColorStop(1, '#d97706');
-  ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 18;
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, ballR, 0, TAU); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = 'rgba(255,255,255,.6)';
-  ctx.beginPath(); ctx.arc(-ballR * 0.35, -ballR * 0.4, ballR * 0.24, 0, TAU); ctx.fill();
+  ctx.drawImage(ballSpr, -ballSpr.width / 2, -ballSpr.height / 2);
+  if (shield > 0) {
+    ctx.strokeStyle = 'rgba(34,211,238,.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, ballR + 8 + Math.sin(tGlobal * 5) * 1.5, 0, TAU);
+    ctx.stroke();
+  }
+  if (magnet > 0) {
+    ctx.strokeStyle = 'rgba(244,114,182,' + (0.4 + 0.3 * Math.min(1, magnet / 2)) + ')';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.arc(0, 0, ballR * 6, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   ctx.restore();
 }
 function draw() {
-  const g = ctx.createRadialGradient(W / 2, H * 0.4, 10, W / 2, H * 0.4, Math.max(W, H) * 0.8);
-  g.addColorStop(0, '#0e1a33'); g.addColorStop(1, '#070a16');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(bgCan, 0, 0, W, H);
   ctx.fillStyle = 'rgba(56,189,248,.05)';
   ctx.fillRect(cx - rx - 18, 0, 12, H);
   ctx.fillRect(cx + rx + 6, 0, 12, H);
@@ -397,18 +590,42 @@ function draw() {
   ctx.save();
   if (shake > 0) ctx.translate(rand(-shake, shake) * 0.5, rand(-shake, shake) * 0.5);
 
-  const vis = [];
-  for (const p of platforms) { if (p.broken) continue; const sy = py(p.i); if (sy > -3 * GAP && sy < H + 3 * GAP) vis.push({ p, sy }); }
-  vis.sort((a, b) => a.sy - b.sy);
-  for (const v of vis) drawPlatform(v.p, v.sy);
+  visBuf.length = 0;
+  for (const p of platforms) { if (p.broken) continue; const sy = py(p.i); if (sy > -3 * GAP && sy < H + 3 * GAP) visBuf.push({ p, sy }); }
+  visBuf.sort((a, b) => a.sy - b.sy);
+  for (const v of visBuf) drawPlatform(v.p, v.sy);
 
   for (const gm of gems) {
     if (gm.collected) continue;
     const sy = gm.i * GAP - ry - ringHalf - ballR - camY;
     if (sy > -60 && sy < H + 60) drawGem(cx + gm.off, sy);
   }
+  for (const pu of powerups) {
+    if (pu.collected) continue;
+    const sy = pu.i * GAP - ry - ringHalf - ballR - camY;
+    if (sy > -60 && sy < H + 60) drawShield(cx + pu.off, sy);
+  }
+  for (const gp of goldPus) {
+    if (gp.collected) continue;
+    const sy = gp.i * GAP - ry - ringHalf - ballR - camY;
+    if (sy > -60 && sy < H + 60) drawRing(cx + gp.off, sy);
+  }
+  for (const mg of mags) {
+    if (mg.collected) continue;
+    const sy = mg.i * GAP - ry - ringHalf - ballR - camY;
+    if (sy > -60 && sy < H + 60) drawMag(cx + mg.off, sy);
+  }
 
   if (phase !== 'dying') drawBall();
+
+  for (const rg of rings) {
+    const k = rg.t / 0.32;
+    ctx.globalAlpha = (1 - k) * 0.65;
+    ctx.strokeStyle = rg.color;
+    ctx.lineWidth = 3 * (1 - k) + 1;
+    ctx.beginPath(); ctx.arc(rg.x, rg.y, 34 + 90 * k, 0, TAU); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 
   for (const p of particles) {
     const a = 1 - p.t / p.life;
@@ -442,7 +659,7 @@ function tap(e) {
   ensureAudio();
   if (phase !== 'resting') return;
   shatter(cur);
-  beep(200, 0.08, 'square', 0.08);
+  sfx('hit');
   buzz(8);
   fallTarget = cur + 1;
   ensureWorld(fallTarget + 24);
@@ -460,6 +677,8 @@ resize();
 initWorld();
 by = ballRestY(0); camY = by - desired;
 $('mute').textContent = muted ? '🔇' : '🔊';
+$('ringInfo').textContent = '💍 Golden Rings Ever: ' + ringBest;
+$('comboInfo').textContent = 'Best Combo: ×' + comboRec;
 updateHUD();
 requestAnimationFrame(loop);
 </script>

@@ -20,6 +20,7 @@ h1{font-size:26px;font-weight:900;letter-spacing:-1px}
 .disc{position:absolute;border-radius:50%;width:calc((100% - 20px - 36px)/7);aspect-ratio:1;z-index:2;will-change:transform}
 .disc.r{background:radial-gradient(circle at 35% 30%,#fca5a5,#ef4444 60%,#b91c1c)}
 .disc.y{background:radial-gradient(circle at 35% 30%,#fef08a,#facc15 60%,#ca8a04)}
+.disc.ghost{opacity:.38;pointer-events:none;z-index:1}
 .disc.win::after{content:'';position:absolute;inset:-5px;border-radius:50%;box-shadow:0 0 16px 6px rgba(255,255,255,.95);pointer-events:none;animation:winpulse .6s ease infinite;animation-delay:var(--wd,0ms);will-change:opacity}
 @keyframes winpulse{0%,100%{opacity:.3}50%{opacity:1}}
 #winline{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:visible}
@@ -37,8 +38,16 @@ h1{font-size:26px;font-weight:900;letter-spacing:-1px}
 .ov .sub{color:#cbd5e1;font-size:16px}
 .banner{position:fixed;top:20%;left:50%;transform:translate(-50%,-50%);background:rgba(15,23,42,.95);border:2px solid #334155;padding:16px 32px;border-radius:16px;font-size:24px;font-weight:900;z-index:30;animation:banner .3s ease}
 @keyframes banner{0%{scale:.6;opacity:0}100%{scale:1;opacity:1}}
+@keyframes boardshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}50%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+#board.shake{animation:boardshake .3s}
+@keyframes dropthud{0%,100%{transform:translateY(0)}35%{transform:translateY(-3px)}70%{transform:translateY(1px)}}
+#board.dropthud{animation:dropthud .18s ease}
 .hidden{display:none}
 .confetti{position:fixed;left:50%;top:35%;width:10px;height:10px;border-radius:2px;pointer-events:none;z-index:60;transition:transform .9s cubic-bezier(.15,.8,.3,1),opacity .9s ease-in;will-change:transform,opacity}
+.goldmark{position:absolute;z-index:4;top:8px;left:0;pointer-events:none;font-size:15px;text-shadow:0 0 8px rgba(250,204,21,.9);animation:gfloat 1s ease-in-out infinite}
+@keyframes gfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.disc.hint{z-index:6;pointer-events:none;border:3px dashed #7dd3fc;background:rgba(125,211,252,.18);animation:hintpulse .55s ease-in-out infinite}
+@keyframes hintpulse{0%,100%{box-shadow:0 0 4px rgba(125,211,252,.3)}50%{box-shadow:0 0 18px 7px rgba(125,211,252,.75)}}
 </style>
 </head>
 <body>
@@ -54,7 +63,10 @@ h1{font-size:26px;font-weight:900;letter-spacing:-1px}
 <div id="board">
   <div class="holes" id="holes"></div>
 </div>
-<button class="btn" id="newBtn" style="font-size:18px;padding:13px 34px">🔄 New Round</button>
+<div style="display:flex;gap:8px;align-items:center;justify-content:center">
+<button class="btn" id="newBtn" style="font-size:18px;padding:13px 34px;flex:1;max-width:230px">🔄 New Round</button>
+<button class="mbtn" id="hintBtn" style="min-height:48px">💡 Hint · 1⚡ (0)</button>
+</div>
 <div class="ov" id="start">
   <h1>Connect Four</h1>
   <div style="color:#cbd5e1;font-size:15px">Choose mode:</div>
@@ -70,24 +82,45 @@ h1{font-size:26px;font-weight:900;letter-spacing:-1px}
   <button class="mbtn big" id="modeBtn">Change Mode</button>
 </div>
 <script>
+
 const COLS=7,ROWS=6;
 let board=[],discEls=[],turn=1,mode='ai',scores=[0,0],winner=0,locked=false,aiThinking=false;
 let streak=0,lastWinner=0,best=+localStorage.getItem('c4Best')||0,overTimer=null,roundToken=0;
+let coins=+localStorage.getItem('c4Coins')||0,goldCol=-1,goldLive=false,goldEl=null;
 let muted=localStorage.getItem('c4Muted')==='1';
 let AC;
 function initAudio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}}
 function tone(f,d,type,v){if(!AC||muted)return;const t0=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,t0);g.gain.setValueAtTime(v||.16,t0);g.gain.exponentialRampToValueAtTime(.001,t0+d);o.connect(g);g.connect(AC.destination);o.start(t0);o.stop(t0+d);}
-function snd(n){if(!AC||muted)return;if(n==='drop')tone(240,.08,'sine',.2);if(n==='win'){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.18,'triangle',.2),i*160));}if(n==='lose')tone(160,.35,'sawtooth',.2);if(n==='draw')tone(300,.3,'sine',.15);}
+const SFXP={};['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
+function sfx(n){if(muted)return;var a=SFXP[n];if(!a)return;try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}}
+function snd(n){if(muted)return;if(n==='drop')sfx('pop');if(n==='win')sfx('win');if(n==='lose')sfx('lose');if(n==='draw')sfx('tick');if(n==='deny')sfx('buzz');}
 function confetti(){const cols=['#f87171','#facc15','#38bdf8','#4ade80','#a78bfa','#f472b6'];for(let i=0;i<30;i++){const d=document.createElement('div');d.className='confetti';d.style.background=cols[i%cols.length];document.body.appendChild(d);const a=Math.random()*Math.PI*2,s=90+Math.random()*240,dx=Math.cos(a)*s,dy=Math.sin(a)*s-140,rot=(Math.random()*720-360)|0;requestAnimationFrame(()=>requestAnimationFrame(()=>{d.style.transform='translate('+dx+'px,'+dy+'px) rotate('+rot+'deg)';d.style.opacity='0';}));setTimeout(()=>d.remove(),1000);}}
 const muteBtn=document.getElementById('muteBtn');
 function renderMute(){muteBtn.textContent=muted?'🔇':'🔊';}
 muteBtn.addEventListener('pointerdown',e=>{e.stopPropagation();muted=!muted;localStorage.setItem('c4Muted',muted?'1':'0');renderMute();});
 renderMute();
-function updStreak(){document.getElementById('streak').textContent='Streak: '+streak+' \u2022 Best: '+best;}
+function updStreak(){document.getElementById('streak').textContent='Streak: '+streak+' \u2022 Best: '+best+' \u2022 \u26a1 '+coins;const hb=document.getElementById('hintBtn');if(hb)hb.textContent='\ud83d\udca1 Hint \u00b7 1\u26a1 ('+coins+')';}
 updStreak();
 const boardEl=document.getElementById('board'),holesEl=document.getElementById('holes');
 for(let i=0;i<COLS*ROWS;i++){const h=document.createElement('div');h.className='hole';holesEl.appendChild(h);}
 let cellW=0,holesLeft=0,holesW=0;
+let ghostEl=null,ghostCol=-1;
+function updGhost(){
+if(!ghostEl){ghostEl=document.createElement('div');ghostEl.className='disc ghost';ghostEl.style.display='none';boardEl.appendChild(ghostEl);}
+if(ghostCol<0||winner||locked||(mode==='ai'&&turn===2)){ghostEl.style.display='none';return;}
+const row=board[ghostCol].indexOf(0);
+if(row===-1){ghostEl.style.display='none';return;}
+if(!cellW)measure();
+ghostEl.className='disc ghost '+(turn===1?'r':'y');
+ghostEl.style.display='';
+ghostEl.style.left=10+ghostCol*(cellW+6)+'px';
+ghostEl.style.top=10+row*(cellW+6)+'px';
+}
+function updGold(){
+if(!goldEl)return;
+if(goldLive&&goldCol>=0&&!winner&&!locked){if(!cellW)measure();goldEl.style.display='';goldEl.style.left=10+goldCol*(cellW+6)+'px';goldEl.style.top='10px';}
+else goldEl.style.display='none';
+}
 function measure(){
 const br=boardEl.getBoundingClientRect();
 cellW=(br.width-20-36)/7;
@@ -95,7 +128,7 @@ const hr=holesEl.getBoundingClientRect();
 holesLeft=hr.left;holesW=hr.width;
 }
 let mPend=false;
-window.addEventListener('resize',()=>{if(mPend)return;mPend=true;requestAnimationFrame(()=>{mPend=false;measure();});});
+window.addEventListener('resize',()=>{if(mPend)return;mPend=true;requestAnimationFrame(()=>{mPend=false;measure();updGold();});});
 measure();
 function newRound(){
 clearTimeout(overTimer);
@@ -104,23 +137,27 @@ document.getElementById('over').classList.add('hidden');
   board=Array.from({length:COLS},()=>Array(ROWS).fill(0));
   discEls=Array.from({length:COLS},()=>Array(ROWS).fill(null));
   turn=1;winner=0;locked=false;aiThinking=false;
-document.querySelectorAll('.disc').forEach(d=>d.remove());
+document.querySelectorAll('.disc').forEach(d=>{if(d!==ghostEl)d.remove();});
 document.getElementById('banner')?.remove();
 document.getElementById('winline')?.remove();
-updateTurn();
+updateTurn();updGhost();
+goldCol=(Math.random()*COLS)|0;goldLive=true;
+if(!goldEl){goldEl=document.createElement('div');goldEl.className='goldmark';boardEl.appendChild(goldEl);}
+updGold();
 }
 function updateTurn(){
 const t=document.getElementById('turn');
 if(winner)t.textContent='';
 else t.textContent=mode==='ai'?(turn===1?'Your turn (Red)':'CPU thinking... (Yellow)'):turn===1?'P1 (Red)':'P2 (Yellow)';
 }
+function denyShake(){snd('deny');boardEl.classList.remove('shake');void boardEl.offsetWidth;boardEl.classList.add('shake');}
 function drop(col,byAI){
-if(locked||winner)return;
-if(!byAI&&mode==='ai'&&turn===2)return;
+if(locked||winner){if(!byAI)denyShake();return;}
+if(!byAI&&mode==='ai'&&turn===2){denyShake();return;}
 initAudio();
 if(!cellW)measure();
 const row=board[col].indexOf(0);
-if(row===-1)return;
+if(row===-1){if(!byAI)denyShake();return;}
 board[col][row]=turn;
 const pad=10,gap=6;
 const disc=document.createElement('div');
@@ -132,10 +169,19 @@ disc.style.transform='translateY('+fromY+'px)';
 boardEl.appendChild(disc);
 discEls[col][row]=disc;
 snd('drop');
+boardEl.classList.remove('dropthud');void boardEl.offsetWidth;boardEl.classList.add('dropthud');
 requestAnimationFrame(()=>requestAnimationFrame(()=>{
 disc.style.transition='transform .45s cubic-bezier(.3,1.6,.5,1)';
 disc.style.transform='translateY(0)';
 }));
+if(goldLive&&col===goldCol){
+goldLive=false;goldEl.style.display='none';
+coins++;try{localStorage.setItem('c4Coins',coins);}catch(e){}
+updStreak();sfx('coin');
+const gb=document.createElement('div');gb.className='banner';
+gb.textContent='\u26a1 +1 Coin!';document.body.appendChild(gb);
+setTimeout(()=>gb.remove(),950);
+}
 const w=checkWin(col,row,turn);
 if(w){winner=turn;w.forEach(([c,r],i)=>{
 if(discEls[c][r]){discEls[c][r].classList.add('win');discEls[c][r].style.setProperty('--wd',(i*90)+'ms');}
@@ -153,7 +199,7 @@ const title=mode==='ai'?(turn===1?'You win! 🎉':'CPU wins! 🤖'):(turn===1?'P
 const b=document.createElement('div');b.className='banner';b.id='banner';
 b.textContent=title;
 document.body.appendChild(b);
-locked=true;updateTurn();
+locked=true;updateTurn();updGhost();
 showOver(title,'Score '+scores[0]+' : '+scores[1]);
 return;
 }
@@ -161,12 +207,12 @@ if(board.every(c=>c.indexOf(0)===-1)){
 locked=true;streak=0;lastWinner=0;updStreak();
 snd('draw');
 const b=document.createElement('div');b.className='banner';b.id='banner';b.textContent='Draw! 🤝';
-document.body.appendChild(b);updateTurn();
+document.body.appendChild(b);updateTurn();updGhost();
 showOver('Draw! 🤝','Score '+scores[0]+' : '+scores[1]);
 return;
 }
 turn=turn===1?2:1;
-updateTurn();
+updateTurn();updGhost();
   if(mode==='ai'&&turn===2&&!winner){aiThinking=true;const tk=roundToken;const delay=500+Math.random()*400;setTimeout(()=>{if(tk===roundToken)aiMove();else aiThinking=false;},delay);}
 }
 function checkWin(c,r,p){
@@ -234,11 +280,31 @@ if(!gives)return c;
 }
 return pref.find(c=>board[c].indexOf(0)!==-1);
 }
+function hintMove(){
+for(let c=0;c<COLS;c++){const r=board[c].indexOf(0);if(r===-1)continue;board[c][r]=1;const w=checkWin(c,r,1);board[c][r]=0;if(w)return c;}
+return null;
+}
+document.getElementById('hintBtn').addEventListener('pointerdown',e=>{
+e.stopPropagation();
+if(mode!=='ai'||turn!==1||winner||locked){snd('deny');return;}
+if(coins<1){snd('deny');return;}
+const c=hintMove();
+if(c===null){snd('deny');return;}
+if(!cellW)measure();
+coins--;try{localStorage.setItem('c4Coins',coins);}catch(err){}
+updStreak();sfx('levelup');
+const h=document.createElement('div');h.className='disc hint';
+h.style.left=10+c*(cellW+6)+'px';h.style.top='10px';
+boardEl.appendChild(h);
+setTimeout(()=>h.remove(),3600);
+});
 holesEl.addEventListener('pointerdown',e=>{
 if(!holesW)measure();
 const col=Math.floor((e.clientX-holesLeft)/(holesW/COLS));
 if(col>=0&&col<COLS)drop(col);
-});
+},{passive:true});
+holesEl.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse')return;if(!holesW)measure();ghostCol=Math.floor((e.clientX-holesLeft)/(holesW/COLS));if(ghostCol<0||ghostCol>=COLS)ghostCol=-1;updGhost();},{passive:true});
+holesEl.addEventListener('pointerleave',()=>{ghostCol=-1;updGhost();});
 document.querySelectorAll('.modes .mbtn').forEach(b=>b.addEventListener('pointerdown',()=>{
 mode=b.dataset.m;scores=[0,0];
 document.getElementById('s1').textContent='P1: 0';
