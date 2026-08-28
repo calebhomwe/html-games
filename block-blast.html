@@ -26,6 +26,9 @@ h1 {
 .scoreBox .label { font-size: 0.65rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
 .scoreBox .value { font-size: 1.4rem; font-weight: 900; color: #e5e7eb; }
 .scoreBox .value.combo { color: #facc15; }
+.scoreBox.small { padding: 8px 10px; min-width: 44px; }
+.scoreBox .value.blast { color: #f43f5e; }
+#metaStats { font-size: 0.7rem; color: #64748b; font-weight: 600; text-align: center; min-height: 14px; }
 
 #gridCanvas { display: block; border-radius: 12px; box-shadow: 0 0 0 2px rgba(167,139,250,0.3), 0 8px 32px rgba(0,0,0,0.5), 0 0 60px rgba(167,139,250,0.15); touch-action: none; }
 
@@ -68,6 +71,7 @@ body.shake { animation: bodyShake 0.3s ease-out; }
     <div class="scoreBox"><div class="label">Score</div><div class="value" id="scoreVal">0</div></div>
     <div class="scoreBox"><div class="label">Best</div><div class="value" id="bestVal">0</div></div>
     <div class="scoreBox"><div class="label">Combo</div><div class="value combo" id="comboVal">0</div></div>
+    <div class="scoreBox small"><div class="label">Blast</div><div class="value blast" id="blastVal">0/5</div></div>
   </div>
   <canvas id="gridCanvas"></canvas>
   <div id="comboText"></div>
@@ -77,11 +81,13 @@ body.shake { animation: bodyShake 0.3s ease-out; }
     <button class="btn" id="btnUndo">↩ Undo</button>
     <button class="btn" id="btnReset">🔄 New Game</button>
   </div>
+  <div id="metaStats"></div>
 </div>
 
 <a class="back" href="../index.html">← Back to Arcade Hub</a>
 
 <script>
+
 // ==================== POLYFILL ====================
 
 if (!CanvasRenderingContext2D.prototype.roundRect) {
@@ -105,44 +111,53 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 
 // ==================== SOUND ENGINE ====================
 
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function resumeAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); }
+let muted = false;
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function resumeAudio() { const c = ensureAudio(); if (c && c.state === 'suspended') c.resume(); }
 document.addEventListener('click', resumeAudio, {once:true});
 document.addEventListener('touchstart', resumeAudio, {once:true});
 
 function playTone(freq, duration, type, vol, ramp) {
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
+  const c = ensureAudio();
+  const osc = c.createOscillator();
+  const gain = c.createGain();
   osc.type = type || 'sine';
-  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-  if (ramp) osc.frequency.linearRampToValueAtTime(freq * ramp, audioCtx.currentTime + duration);
-  gain.gain.setValueAtTime(vol || 0.15, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-  osc.connect(gain); gain.connect(audioCtx.destination);
-  osc.start(); osc.stop(audioCtx.currentTime + duration);
+  osc.frequency.setValueAtTime(freq, c.currentTime);
+  if (ramp) osc.frequency.linearRampToValueAtTime(freq * ramp, c.currentTime + duration);
+  gain.gain.setValueAtTime(vol || 0.15, c.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
+  osc.connect(gain); gain.connect(c.destination);
+  osc.start(); osc.stop(c.currentTime + duration);
 }
 
 function playNoise(duration, vol) {
-  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
+  const c = ensureAudio();
+  const buf = c.createBuffer(1, c.sampleRate * duration, c.sampleRate);
   const data = buf.getChannelData(0);
   for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
-  const src = audioCtx.createBufferSource();
-  const gain = audioCtx.createGain();
-  const filter = audioCtx.createBiquadFilter();
-  filter.type = 'lowpass'; filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+  const src = c.createBufferSource();
+  const gain = c.createGain();
+  const filter = c.createBiquadFilter();
+  filter.type = 'lowpass'; filter.frequency.setValueAtTime(800, c.currentTime);
   src.buffer = buf;
-  gain.gain.setValueAtTime(vol || 0.1, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-  src.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+  gain.gain.setValueAtTime(vol || 0.1, c.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
+  src.connect(filter); filter.connect(gain); gain.connect(c.destination);
   src.start();
 }
 
-function sfxPlace() { playTone(200, 0.1, 'triangle', 0.12); playNoise(0.06, 0.06); }
-function sfxClear() { playTone(520, 0.15, 'square', 0.1); playTone(660, 0.12, 'square', 0.08); setTimeout(() => playTone(780, 0.1, 'square', 0.06), 80); }
-function sfxCombo(n) { const f = 400 + n * 80; playTone(f, 0.2, 'square', 0.1); setTimeout(() => playTone(f*1.25, 0.2, 'square', 0.1), 100); setTimeout(() => playTone(f*1.5, 0.25, 'square', 0.12), 200); }
-function sfxGameOver() { playTone(300, 0.3, 'sawtooth', 0.1, 0.3); setTimeout(() => playTone(200, 0.3, 'sawtooth', 0.1, 0.3), 200); setTimeout(() => playTone(100, 0.5, 'sawtooth', 0.12, 0.3), 400); }
-function sfxSelect() { playTone(600, 0.05, 'sine', 0.08); }
-function sfxUndo() { playTone(400, 0.08, 'sine', 0.06); playTone(300, 0.08, 'sine', 0.06); }
+const SFXP={};['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
+function sfx(n){if(muted)return;var a=SFXP[n];if(!a)return;try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}}
+function sfxPlace() { sfx('pop'); }
+function sfxClear() { sfx('coin'); }
+function sfxCombo(n) { sfx('levelup'); }
+function sfxGameOver() { sfx('lose'); }
+function sfxSelect() { sfx('tap'); }
+function sfxUndo() { sfx('whoosh'); }
 // ==================== BLOCK SHAPES ====================
 
 const SHAPES = [
@@ -178,14 +193,25 @@ let pieces = [];
 let selectedPiece = -1;
 let score = 0;
 let bestScore = parseInt(localStorage.getItem('blockblast_best') || '0');
+let prevBest = 0;
 let comboCount = 0;
 let moveHistory = [];
 let gameOver = false;
 let clearingCells = [];
+let clearingColors = {};
 let clearAnim = 0;
 let particles = [];
 let shakeAmount = 0;
 let animFrame = null;
+let blastCharge = 0, bombsPlaced = 0;
+const BLAST_MAX = 5, BOMB_COLOR = '#f43f5e';
+let clearStreak = 0;
+let bestStreakEver = parseInt(localStorage.getItem('blockblast_streak') || '0');
+let lifetimeClears = parseInt(localStorage.getItem('blockblast_clears') || '0');
+let sparks = parseInt(localStorage.getItem('blockblast_sparks') || '0');
+let quadEver = false;
+let ach = [];
+try { ach = JSON.parse(localStorage.getItem('blockblast_ach') || '[]') || []; } catch (e) { ach = []; }
 
 // ==================== CANVAS ====================
 
@@ -194,13 +220,16 @@ const ctx = canvas.getContext('2d');
 const dpr = window.devicePixelRatio || 1;
 let cellSize = 0, gridPadding = 0;
 let hoverCell = null;
+let cellGradCache = {};
 
 function resizeGrid() {
   const maxWidth = Math.min(document.getElementById('gameWrap').clientWidth - 16, 440);
   const size = Math.floor(maxWidth * dpr);
   canvas.width = size; canvas.height = size;
+  canvas.style.width = maxWidth + 'px'; canvas.style.height = maxWidth + 'px';
   cellSize = Math.floor(size / GRID);
   gridPadding = Math.floor((size - cellSize * GRID) / 2);
+  cellGradCache = {};
 }
 resizeGrid();
 window.addEventListener('resize', () => { resizeGrid(); drawGrid(); drawPieces(); });
@@ -213,13 +242,18 @@ function initGrid() {
   selectedPiece = -1;
   score = 0;
   comboCount = 0;
+  prevBest = bestScore;
   moveHistory = [];
   gameOver = false;
   clearingCells = [];
+  clearingColors = {};
   clearAnim = 0;
   particles = [];
   shakeAmount = 0;
   hoverCell = null;
+  blastCharge = 0;
+  bombsPlaced = 0;
+  clearStreak = 0;
   updateUI();
   drawGrid();
   drawPieces();
@@ -232,6 +266,12 @@ function generatePieces() {
     const colorIdx = Math.floor(Math.random() * COLORS.length);
     p.push({ shape: SHAPES[shapeIdx].map(r => [...r]), color: COLORS[colorIdx], used: false });
   }
+  if (blastCharge >= BLAST_MAX) {
+    p[1] = { shape: [[1]], color: BOMB_COLOR, used: false, bomb: true };
+    blastCharge -= BLAST_MAX;
+    sfx('levelup');
+  }
+  if (Math.random() < 0.12) p[2].star = true;
   return p;
 }
 
@@ -303,22 +343,71 @@ function placePieceAt(pieceIdx, row, col) {
   grid = placePiece(grid, pieces[pieceIdx].shape, colorIdx, row, col);
   pieces[pieceIdx].used = true;
 
+  if (pieces[pieceIdx].bomb) {
+    if (grid[row * GRID + col] === 0) grid[row * GRID + col] = 7;
+    const bombCells = [];
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const rr = row + dr, cc = col + dc;
+        if (rr < 0 || rr >= GRID || cc < 0 || cc >= GRID) continue;
+        const idx = rr * GRID + cc;
+        if (grid[idx]) bombCells.push(idx);
+      }
+    }
+    const prevCells = bombCells.map(i => grid[i]);
+    grid = grid.slice();
+    for (const idx of bombCells) grid[idx] = 0;
+    for (let i = 0; i < bombCells.length; i++) {
+      const idx = bombCells[i], cr = Math.floor(idx / GRID), cc = idx % GRID;
+      const px = gridPadding + cc * cellSize + cellSize / 2;
+      const py = gridPadding + cr * cellSize + cellSize / 2;
+      const pColor = COLORS[(prevCells[i] || 1) - 1] || BOMB_COLOR;
+      for (let k = 0; k < 7; k++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 5;
+        particles.push({ x: px, y: py, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed - 2, size: 3 + Math.random()*4, life: 0.4 + Math.random()*0.5, color: pColor });
+      }
+    }
+    if (particles.length > 500) particles.splice(0, particles.length - 500);
+    bombsPlaced++;
+    sfx('boom');
+    shakeAmount = Math.max(shakeAmount, 2);
+    document.getElementById('comboText').textContent = '💣 BOOM!';
+    setTimeout(() => { document.getElementById('comboText').textContent = ''; }, 1500);
+  }
+
   const { rows, cols } = findFullLines(grid);
   const linesCleared = rows.length + cols.length;
 
 if (linesCleared > 0) {
+    blastCharge = Math.min(BLAST_MAX, blastCharge + 1);
+    clearStreak++;
+    lifetimeClears++;
+    if (linesCleared >= 4) quadEver = true;
+    if (clearStreak > bestStreakEver) bestStreakEver = clearStreak;
+    localStorage.setItem('blockblast_clears', lifetimeClears);
+    localStorage.setItem('blockblast_streak', bestStreakEver);
+    if (rankName(lifetimeClears) !== rankName(lifetimeClears - 1)) sfx('levelup');
     comboCount++;
     const points = linesCleared * 10 * comboCount;
     score += points;
     if (linesCleared >= 3) score += 20;
+
+    if (pieces[pieceIdx].star) {
+      sparks++;
+      try { localStorage.setItem('blockblast_sparks', String(sparks)); } catch (e) {}
+      sfx('levelup');
+    }
 
     if (linesCleared >= 4) sfxCombo(linesCleared);
     else if (comboCount >= 3) sfxCombo(comboCount);
     else sfxClear();
 
     clearingCells = [];
+    clearingColors = {};
     for (const r of rows) for (let c = 0; c < GRID; c++) clearingCells.push(r * GRID + c);
     for (const c of cols) for (let r = 0; r < GRID; r++) clearingCells.push(r * GRID + c);
+    for (const cellIdx of clearingCells) clearingColors[cellIdx] = grid[cellIdx];
     clearAnim = 1.0;
 
     // Particle burst on cleared cells
@@ -350,11 +439,29 @@ if (linesCleared > 0) {
     } else {
       document.getElementById('comboText').textContent = `+${points}`;
     }
+    if (pieces[pieceIdx].star) document.getElementById('comboText').textContent = '💫 ' + document.getElementById('comboText').textContent;
     setTimeout(() => { document.getElementById('comboText').textContent = ''; }, 1500);
   } else {
     comboCount = 0;
+    clearStreak = 0;
     score += pieces[pieceIdx].shape.flat().filter(Boolean).length;
     sfxPlace();
+    const psh = pieces[pieceIdx].shape;
+    for (let r = 0; r < psh.length; r++) {
+      for (let c = 0; c < psh[r].length; c++) {
+        if (!psh[r][c]) continue;
+        particles.push({
+          x: gridPadding + (col + c) * cellSize + cellSize / 2,
+          y: gridPadding + (row + r) * cellSize + cellSize / 2,
+          vx: (Math.random() - 0.5) * 2.2,
+          vy: -(0.6 + Math.random() * 1.6),
+          size: 2 + Math.random() * 2.5,
+          life: 0.35 + Math.random() * 0.2,
+          color: pieces[pieceIdx].color
+        });
+      }
+    }
+    if (particles.length > 500) particles.splice(0, particles.length - 500);
   }
 
   selectedPiece = -1;
@@ -374,10 +481,16 @@ if (linesCleared > 0) {
   }
 
   if (score > bestScore) {
+    if (prevBest > 0 && prevBest === bestScore) {
+      sfx('win');
+      document.getElementById('comboText').textContent = '🏆 NEW BEST!';
+      setTimeout(() => { document.getElementById('comboText').textContent = ''; }, 2000);
+    }
     bestScore = score;
     localStorage.setItem('blockblast_best', bestScore);
   }
 
+  checkAch();
   updateUI();
   drawGrid();
   drawPieces();
@@ -394,6 +507,7 @@ function undo() {
   selectedPiece = -1;
   hoverCell = null;
   clearingCells = [];
+  clearingColors = {};
   clearAnim = 0;
   gameOver = false;
   updateUI();
@@ -406,6 +520,41 @@ function undo() {
 function getCellColor(idx) {
   if (!grid[idx]) return 'transparent';
   return COLORS[grid[idx] - 1];
+}
+
+function cellGradient(idx, color, x, y, s) {
+  let e = cellGradCache[idx];
+  if (!e || e[0] !== color) {
+    const g = ctx.createLinearGradient(x, y, x + s, y + s);
+    g.addColorStop(0, color);
+    g.addColorStop(1, color + 'cc');
+    cellGradCache[idx] = [color, g];
+    return g;
+  }
+  return e[1];
+}
+
+const blockTileCache = {};
+function blockTile(color, s, blockSize) {
+  const key = color + '|' + s;
+  let t = blockTileCache[key];
+  if (t) return t;
+  t = document.createElement('canvas');
+  t.width = Math.ceil(s * 2); t.height = Math.ceil(s * 2);
+  const c = t.getContext('2d');
+  c.scale(2, 2);
+  const g = c.createLinearGradient(0, 0, s, s);
+  g.addColorStop(0, color);
+  g.addColorStop(1, color + 'cc');
+  c.fillStyle = g;
+  c.beginPath();
+  c.roundRect(0, 0, s, s, Math.max(2, blockSize * 0.15));
+  c.fill();
+  c.fillStyle = 'rgba(255,255,255,0.15)';
+  c.beginPath();
+  c.roundRect(s * 0.15, s * 0.1, s * 0.7, s * 0.35, Math.max(1, blockSize * 0.08));
+  c.fill();
+  return blockTileCache[key] = t;
 }
 
 function drawGrid() {
@@ -445,19 +594,18 @@ function drawGrid() {
   for (let r = 0; r < GRID; r++) {
     for (let c = 0; c < GRID; c++) {
       const idx = r * GRID + c;
-      const color = getCellColor(idx);
+      let color = getCellColor(idx);
+      let alpha = 1;
+      let scale = 1;
+      if (clearingCells.includes(idx) && clearAnim > 0) {
+        if (color === 'transparent') color = COLORS[(clearingColors[idx] || 1) - 1] || '#facc15';
+        alpha = clearAnim;
+        scale = clearAnim;
+      }
       if (color === 'transparent') continue;
       const x = gridPadding + c * cellSize + 1;
       const y = gridPadding + r * cellSize + 1;
       const s = cellSize - 2;
-
-      // Clearing animation
-      let alpha = 1;
-      let scale = 1;
-      if (clearingCells.includes(idx) && clearAnim > 0) {
-        alpha = clearAnim;
-        scale = clearAnim;
-      }
 
       ctx.save();
       if (scale !== 1) {
@@ -467,10 +615,7 @@ function drawGrid() {
       ctx.globalAlpha = alpha;
 
       // Cell with gradient
-      const grad = ctx.createLinearGradient(x, y, x + s, y + s);
-      grad.addColorStop(0, color);
-      grad.addColorStop(1, color + 'cc');
-      ctx.fillStyle = grad;
+      ctx.fillStyle = cellGradient(idx, color, x, y, s);
       ctx.beginPath();
       ctx.roundRect(x, y, s, s, Math.max(2, cellSize * 0.15));
       ctx.fill();
@@ -523,17 +668,27 @@ function drawGrid() {
   }
 
   // Particles
-  for (let i = particles.length - 1; i >= 0; i--) {
+  let pw = 0;
+  for (let i = 0; i < particles.length; i++) {
     const pt = particles[i];
     pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.2; pt.life -= 0.02;
-    if (pt.life <= 0) { particles.splice(i, 1); continue; }
+    if (pt.life <= 0) continue;
+    particles[pw++] = pt;
     ctx.globalAlpha = pt.life;
     ctx.fillStyle = pt.color;
     ctx.beginPath();
     ctx.arc(pt.x, pt.y, pt.size * pt.life, 0, Math.PI * 2);
     ctx.fill();
   }
+  particles.length = pw;
   ctx.globalAlpha = 1;
+
+  if (clearAnim > 0 && clearingCells.length) {
+    ctx.globalAlpha = clearAnim * 0.22;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(gridPadding, gridPadding, cellSize * GRID, cellSize * GRID);
+    ctx.globalAlpha = 1;
+  }
 
   ctx.restore();
 }
@@ -566,18 +721,21 @@ function drawPieces() {
         const x = ox + c * blockSize + 1;
         const y = oy + r * blockSize + 1;
         const s = blockSize - 2;
-        const grad = pctx.createLinearGradient(x, y, x + s, y + s);
-        grad.addColorStop(0, piece.color);
-        grad.addColorStop(1, piece.color + 'cc');
-        pctx.fillStyle = grad;
-        pctx.beginPath();
-        pctx.roundRect(x, y, s, s, Math.max(2, blockSize * 0.15));
-        pctx.fill();
-        pctx.fillStyle = 'rgba(255,255,255,0.15)';
-        pctx.beginPath();
-        pctx.roundRect(x + s*0.15, y + s*0.1, s*0.7, s*0.35, Math.max(1, blockSize * 0.08));
-        pctx.fill();
+        pctx.drawImage(blockTile(piece.color, s, blockSize), x, y, s, s);
       }
+    }
+
+    if (piece.bomb) {
+      pctx.fillStyle = '#fff';
+      pctx.font = 'bold ' + 16 * dpr + 'px system-ui';
+      pctx.textAlign = 'center';
+      pctx.fillText('💣', size / 2, size / 2 + 6);
+    }
+
+    if (piece.star && !piece.bomb) {
+      pctx.font = 'bold ' + 13 * dpr + 'px system-ui';
+      pctx.textAlign = 'center';
+      pctx.fillText('✨', 14 * dpr, 15 * dpr);
     }
 
     slot.appendChild(pc);
@@ -592,10 +750,42 @@ function drawPieces() {
   }
 }
 
+const BADGES = [
+  ['boom', '💣 Demolitionist', () => bombsPlaced >= 1],
+  ['quad', '🔥 Quad Master', () => quadEver],
+  ['chain5', '🔗 Streak 5', () => bestStreakEver >= 5],
+  ['club500', '🏆 500 Club', () => bestScore >= 500],
+  ['spark10', '✨ 10 Sparks', () => sparks >= 10],
+  ['clear100', '🧱 Century', () => lifetimeClears >= 100],
+];
+
+function checkAch() {
+  for (const b of BADGES) {
+    if (ach.indexOf(b[0]) === -1 && b[2]()) {
+      ach.push(b[0]);
+      try { localStorage.setItem('blockblast_ach', JSON.stringify(ach)); } catch (e) {}
+      sfx('levelup');
+      document.getElementById('comboText').textContent = '🎖 ' + b[1] + ' unlocked!';
+      setTimeout(() => { document.getElementById('comboText').textContent = ''; }, 2000);
+    }
+  }
+}
+
+function rankName(n) {
+  if (n >= 500) return '🧱 Legend';
+  if (n >= 200) return '🏅 Grandmaster';
+  if (n >= 100) return '💎 Master';
+  if (n >= 50) return '🥇 Pro';
+  if (n >= 25) return '⚒ Apprentice';
+  return '🌱 Rookie';
+}
+
 function updateUI() {
   document.getElementById('scoreVal').textContent = score;
   document.getElementById('bestVal').textContent = bestScore;
   document.getElementById('comboVal').textContent = comboCount;
+  document.getElementById('blastVal').textContent = (bombsPlaced ? '💣' + bombsPlaced + ' ' : '') + blastCharge + '/' + BLAST_MAX;
+  document.getElementById('metaStats').textContent = rankName(lifetimeClears) + ' · ' + lifetimeClears + ' clears · 🔗 best ' + bestStreakEver + ' · ✨' + sparks + ' · 🎖' + ach.length + '/' + BADGES.length;
   if (gameOver) {
     document.getElementById('status').textContent = 'Game Over! No more moves.';
     document.getElementById('status').style.color = '#f472b6';
@@ -670,7 +860,7 @@ document.getElementById('btnReset').addEventListener('click', initGrid);
 function animLoop() {
   if (clearAnim > 0) {
     clearAnim -= 0.06;
-    if (clearAnim <= 0) { clearingCells = []; clearAnim = 0; }
+    if (clearAnim <= 0) { clearingCells = []; clearingColors = {}; clearAnim = 0; }
   }
   drawGrid();
   if (clearAnim > 0 || particles.length > 0 || shakeAmount > 0.01) {

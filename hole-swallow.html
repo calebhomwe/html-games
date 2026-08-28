@@ -39,16 +39,19 @@
 <a id="hub" href="../index.html">← Hub</a>
 <div class="overlay" id="start">
   <h1>HOLE SWALLOW</h1>
-  <div class="sub">Drag the black hole around the field. Eat anything <b>smaller</b> than the hole to score & grow. Bigger stuff is off-limits — grow first!</div>
+  <div class="sub">Drag the black hole around the field. Eat anything <b>smaller</b> than the hole to score & grow. Bigger stuff is off-limits — grow first! Rare golden items are extra tasty.</div>
+  <div class="best" id="rankInfo">RANK: 🍽️ Snacker</div>
   <button id="playBtn">▶ PLAY</button>
 </div>
 <div class="overlay hidden" id="gameover">
   <h1>TIME'S UP!</h1>
   <div class="score-big" id="finalScore">0</div>
   <div class="best" id="finalBest">Best: 0</div>
+  <div class="best" id="gildInfo">🌠 Golden Feast: 0</div>
   <button id="restartBtn">↻ PLAY AGAIN</button>
 </div>
 <script>
+
 'use strict';
 const KEY = 'hole-swallow-best';
 const canvas = document.getElementById('c');
@@ -95,28 +98,62 @@ function beep(freq, dur, type, vol, slideTo) {
   o.start(t); o.stop(t + dur);
 }
 function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+const SFXP={};['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
+function sfx(n){if(muted)return;var a=SFXP[n];if(!a)return;try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}}
 
 const ITEMS = [
   { e:'🍒', r:14, v:1 }, { e:'🍎', r:19, v:2 }, { e:'🍩', r:16, v:2 },
   { e:'🎁', r:23, v:3 }, { e:'⚽', r:27, v:4 }, { e:'🍕', r:32, v:5 },
   { e:'🚗', r:46, v:10 }, { e:'🌳', r:55, v:14 }, { e:'🏠', r:68, v:20 }, { e:'🏢', r:92, v:30 }
 ];
+const RANKS = [
+  { r: 0,   n: '🍽️ Snacker' },
+  { r: 55,  n: '😋 Gobbler' },
+  { r: 90,  n: '🐷 Devourer' },
+  { r: 125, n: '🌊 Monstro' },
+  { r: 165, n: '🕳️ Void Feeder' },
+  { r: 200, n: '🌟 Legend' }
+];
 const SUCK_TIME = 0.32, MAX_HOLE = 210, TARGET_COUNT = 26;
 
-const hole = { x:0, y:0, r:34, tx:0, ty:0, pulse:0 };
+const hole = { x:0, y:0, r:34, tx:0, ty:0, pulse:0, squash:0 };
 let objects = [], particles = [], floaters = [];
 let score = 0, best = 0, timeLeft = 60, running = false, shake = 0, spawnT = 0;
+let chain = 0, chainT = 0;
+let bestR = 34, gild = 0, gildL = 0, gildMilestone = 5;
 
 try { best = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) {}
+try { bestR = parseFloat(localStorage.getItem('hole-swallow-rank') || '0', 10) || 34; } catch (e) {}
+try { gildL = parseInt(localStorage.getItem('hole-swallow-gild') || '0', 10) || 0; } catch (e) {}
 
 const EDGES = ['top', 'bottom', 'left', 'right'];
 const elTime = $('time'), elScore = $('score');
 let lastTimeTxt = '';
 function rand(a, b) { return a + Math.random() * (b - a); }
 function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
+function rankIdxOf(r) { let i; for (i = RANKS.length - 1; i >= 0; i--) { if (r >= RANKS[i].r) return i; } return 0; }
+function rankName() { return RANKS[rankIdxOf(bestR)].n; }
+function rankInfoText() {
+  const i = rankIdxOf(bestR);
+  const nxt = RANKS[i + 1];
+  return 'RANK: ' + RANKS[i].n + (nxt ? ' · next ' + nxt.r : ' · MAX!');
+}
+function updateRank() {
+  if (hole.r <= bestR) return;
+  const ri = rankIdxOf(bestR), ni = rankIdxOf(hole.r);
+  bestR = hole.r;
+  try { localStorage.setItem('hole-swallow-rank', String(bestR)); } catch (e) {}
+  if (ni > ri) {
+    addFloater('🏆 RANK UP: ' + RANKS[ni].n + '!', hole.x, hole.y - hole.r - 46, '#fde68a');
+    sfx('levelup');
+    buzz(20);
+  }
+}
 
 function spawnObject(smallOnly, edge) {
-  const it = smallOnly ? ITEMS[(Math.random() * 4) | 0] : pick(ITEMS);
+  const clock = !smallOnly && Math.random() < 0.06;
+  const gold = !clock && !smallOnly && Math.random() < 0.05;
+  const it = clock ? { e:'⏰', r:26, v:0 } : (smallOnly ? ITEMS[(Math.random() * 4) | 0] : pick(ITEMS));
   const m = it.r + 8;
   let x = W / 2, y = H / 2;
   if (edge === 'top') { x = rand(m, Math.max(m + 1, W - m)); y = m; }
@@ -130,7 +167,7 @@ function spawnObject(smallOnly, edge) {
       if (Math.hypot(x - hole.x, y - hole.y) > hole.r + it.r + 46) break;
     }
   }
-  objects.push({ x, y, r: it.r, r0: it.r, e: it.e, v: it.v, vx: rand(-16, 16), vy: rand(-16, 16), suck:null, pop: 0 });
+  objects.push({ x, y, r: it.r, r0: it.r, e: it.e, v: it.v, clock: clock, gold: gold, vx: rand(-16, 16), vy: rand(-16, 16), suck:null, pop: 0 });
 }
 const PMAX = 240, FMAX = 24, pFree = [], fFree = [];
 function burst(x, y, color, n, speed) {
@@ -152,7 +189,7 @@ function addFloater(text, x, y, color) {
 
 function startGame() {
   objects = []; particles = []; floaters = [];
-  score = 0; timeLeft = 60; spawnT = 0; shake = 0;
+  score = 0; timeLeft = 60; spawnT = 0; shake = 0; chain = 0; chainT = 0; gild = 0; gildMilestone = 5;
   hole.r = 34; hole.x = W / 2; hole.y = H / 2; hole.tx = W / 2; hole.ty = H / 2;
   for (let i = 0; i < 16; i++) spawnObject(i < 9);
   running = true;
@@ -170,10 +207,26 @@ function endGame() {
   const nb = score > best;
   if (nb) { best = score; try { localStorage.setItem(KEY, String(best)); } catch (e) {} }
   $('finalBest').textContent = 'Best: ' + best + (nb ? '  🎉 NEW!' : '');
+  $('gildInfo').textContent = rankName() + ' · 🌠 Golden Feast: ' + gildL;
   $('gameover').classList.remove('hidden');
+  sfx('lose');
 }
 
 function update(dt) {
+  if (shake > 0) shake = Math.max(0, shake - 60 * dt);
+  if (hole.pulse > 0) hole.pulse = Math.max(0, hole.pulse - 3 * dt);
+  if (chainT > 0) { chainT -= dt; if (chainT <= 0) chain = 0; }
+  if (hole.squash > 0) hole.squash = Math.max(0, hole.squash - 4.5 * dt);
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96;
+    if (p.t >= p.life) { pFree.push(p); particles[i] = particles[particles.length - 1]; particles.pop(); }
+  }
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i];
+    f.t += dt; f.y -= 40 * dt;
+    if (f.t >= f.life) { fFree.push(f); floaters[i] = floaters[floaters.length - 1]; floaters.pop(); }
+  }
   if (!running) return;
   timeLeft -= dt;
   if (timeLeft <= 0) {
@@ -200,16 +253,44 @@ function update(dt) {
       o.y = hole.y + Math.sin(ang) * d;
       o.r = o.suck.sr * (1 - p);
       if (p >= 1) {
-        score += o.v;
-        elScore.textContent = score;
+        if (o.clock) {
+          timeLeft = Math.min(99, timeLeft + 5);
+          hole.r = Math.min(MAX_HOLE, hole.r + 1.5);
+          updateRank();
+          hole.pulse = 1;
+          burst(hole.x, hole.y, '#fbbf24', 12, 180);
+          addFloater('+5s ⏰', o.x, o.y - o.suck.sr, '#fbbf24');
+          sfx('tick');
+          buzz(20);
+          shake = Math.max(shake, 3);
+        } else {
+          chain = chainT > 0 ? Math.min(12, chain + 1) : 1;
+          chainT = 2.2;
+          const cb = (chain - 1) * 2;
+          score += o.v + cb;
+          if (o.gold) {
+            score += 2;
+            gild++;
+            if (gild > gildL) { gildL = gild; try { localStorage.setItem('hole-swallow-gild', String(gildL)); } catch (e) {} }
+            if (gild === gildMilestone) {
+              gildMilestone += 5;
+              addFloater('🌠 GOLD FEAST ×' + gild + '!', hole.x, hole.y - hole.r - 80, '#fde68a');
+              sfx('levelup');
+            }
+            addFloater('+2 ✨ GOLD', o.x, o.y - o.suck.sr + 26, '#fde68a');
+          }
+          elScore.textContent = score;
         hole.r = Math.min(MAX_HOLE, hole.r + o.v * 0.55);
+        updateRank();
         hole.pulse = 1;
-        burst(hole.x, hole.y, '#a78bfa', 8 + Math.min(14, o.v), 180);
-        addFloater('+' + o.v, o.x, o.y - o.suck.sr, '#c4b5fd');
-        beep(320 + o.v * 12, 0.14, 'triangle', 0.16, 620);
-        buzz(o.v >= 10 ? 30 : 10);
-        shake = Math.max(shake, Math.min(16, 1.5 + o.v * 0.6));
-        if (o.v >= 10) { beep(90, 0.28, 'sawtooth', 0.22, 40); }
+        hole.squash = 1;
+          burst(hole.x, hole.y, '#a78bfa', 8 + Math.min(14, o.v), 180);
+          addFloater('+' + (o.v + cb) + (cb > 0 ? ' 🔥×' + chain : ''), o.x, o.y - o.suck.sr, cb > 0 ? '#fbbf24' : '#c4b5fd');
+          sfx(cb >= 4 ? 'levelup' : 'coin');
+          buzz(o.v >= 10 ? 30 : 10);
+          shake = Math.max(shake, Math.min(16, 1.5 + o.v * 0.6));
+          if (o.v >= 10) { sfx('boom'); }
+        }
         objects.splice(i, 1);
       }
       continue;
@@ -225,41 +306,38 @@ function update(dt) {
     if (o.r < hole.r) {
       if (dist < reach && !o.suck) {
         o.suck = { t: 0, sx: o.x, sy: o.y, sr: o.r, a0: Math.atan2(dy, dx), dist: Math.max(1, dist) };
+        burst(o.x, o.y, '#c4b5fd', 3, 130);
       }
     } else if (dist < hole.r + o.r && dist > 0.001) {
       const push = 90 * dt;
       o.x += (dx / dist) * push; o.y += (dy / dist) * push;
+      shake = Math.max(shake, 1.5);
     }
   }
-
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96;
-    if (p.t >= p.life) { pFree.push(p); particles[i] = particles[particles.length - 1]; particles.pop(); }
-  }
-  for (let i = floaters.length - 1; i >= 0; i--) {
-    const f = floaters[i];
-    f.t += dt; f.y -= 40 * dt;
-    if (f.t >= f.life) { fFree.push(f); floaters[i] = floaters[floaters.length - 1]; floaters.pop(); }
-  }
-  if (shake > 0) shake = Math.max(0, shake - 60 * dt);
-  if (hole.pulse > 0) hole.pulse = Math.max(0, hole.pulse - 3 * dt);
 }
 
 const emoSprites = {};
-function emojiSprite(e, r0) {
-  let s = emoSprites[e];
-  if (!s) {
-    const size = Math.ceil(r0 * 2), pad = 10;
-    const c = document.createElement('canvas');
-    c.width = size + pad * 2; c.height = size + pad * 2;
-    const x = c.getContext('2d');
-    x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = 6;
-    x.font = size + 'px serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.fillText(e, c.width / 2, c.height / 2 + r0 * 0.1);
-    s = { c: c, w: c.width };
-    emoSprites[e] = s;
+function emojiSprite(e, r0, gold) {
+  const key = gold ? e + '|g' : e;
+  let s = emoSprites[key];
+  if (s) return s;
+  const size = Math.ceil(r0 * 2), pad = 10;
+  const c = document.createElement('canvas');
+  c.width = size + pad * 2; c.height = size + pad * 2;
+  const x = c.getContext('2d');
+  x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = 6;
+  x.font = size + 'px serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(e, c.width / 2, c.height / 2 + r0 * 0.1);
+  if (gold) {
+    x.globalCompositeOperation = 'source-atop';
+    x.globalAlpha = 0.55;
+    x.fillStyle = '#fbbf24';
+    x.fillRect(0, 0, c.width, c.height);
+    x.globalAlpha = 1;
+    x.globalCompositeOperation = 'source-over';
   }
+  s = { c: c, w: c.width };
+  emoSprites[key] = s;
   return s;
 }
 const HOLE_SPR_R = MAX_HOLE + 4;
@@ -285,7 +363,14 @@ function draw() {
   for (const o of objects) {
     const pt = Math.min(1, o.pop);
     const ps = 1 + 2.7 * Math.pow(pt - 1, 3) + 1.7 * Math.pow(pt - 1, 2);
-    const spr = emojiSprite(o.e, o.r0);
+    const spr = emojiSprite(o.e, o.r0, o.gold);
+    if (o.gold && pt >= 1) {
+      ctx.strokeStyle = 'rgba(251,191,36,.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, spr.w * ((o.r / o.r0) * ps) / 2 + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     const k = (o.r / o.r0) * (ps > 0.01 ? ps : 1);
     const s = spr.w * k;
     ctx.drawImage(spr.c, o.x - s / 2, o.y - s / 2, s, s);
@@ -294,7 +379,8 @@ function draw() {
   const wob = Math.sin(performance.now() * 0.006) * 2;
   const hr = hole.r + wob;
   const hs = holeSpr.width * (hr / HOLE_SPR_R);
-  ctx.drawImage(holeSpr, hole.x - hs / 2, hole.y - hs / 2, hs, hs);
+  const sq = hole.squash || 0;
+  ctx.drawImage(holeSpr, hole.x - hs * (1 + sq * 0.10) / 2, hole.y - hs * (1 - sq * 0.08) / 2, hs * (1 + sq * 0.10), hs * (1 - sq * 0.08));
   ctx.strokeStyle = 'rgba(167,139,250,.7)'; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.arc(hole.x, hole.y, hr, 0, Math.PI * 2); ctx.stroke();
   if (hole.pulse > 0) {
@@ -330,7 +416,7 @@ function loop(ts) {
   last = ts;
   moveHole(dt);
   update(dt);
-  draw();
+  if (running || objects.length || particles.length || floaters.length) draw();
   requestAnimationFrame(loop);
 }
 
@@ -357,14 +443,15 @@ canvas.addEventListener('mousedown', e => { ensureAudio(); pointer(e); });
 canvas.addEventListener('mousemove', e => { if (dragging) pointer(e); });
 window.addEventListener('mouseup', pointerEnd);
 
-$('playBtn').addEventListener('click', () => { ensureAudio(); startGame(); });
-$('restartBtn').addEventListener('click', () => { ensureAudio(); startGame(); });
+$('playBtn').addEventListener('click', () => { ensureAudio(); sfx('tap'); startGame(); });
+$('restartBtn').addEventListener('click', () => { ensureAudio(); sfx('tap'); startGame(); });
 $('mute').addEventListener('click', () => { ensureAudio(); muted = !muted; $('mute').textContent = muted ? '🔇' : '🔊'; try { localStorage.setItem(KEY + '-mute', muted ? '1' : '0'); } catch (e) {} });
 
 resize();
 buildHoleSprite();
 $('mute').textContent = muted ? '🔇' : '🔊';
 hole.tx = W / 2; hole.ty = H / 2; hole.x = W / 2; hole.y = H / 2;
+$('rankInfo').textContent = rankInfoText();
 requestAnimationFrame(loop);
 </script>
 </body>

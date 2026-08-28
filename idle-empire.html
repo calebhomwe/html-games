@@ -22,7 +22,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background
 .best-box{font-size:16px;color:#d9c07a;background:rgba(50,40,10,.7);border:1px solid #6b561d;padding:10px 22px;border-radius:14px;margin-bottom:14px;line-height:1.7}
 .best-box b{color:#fbbf24}
 .tip{max-width:460px;font-size:13px;color:#a08c50;line-height:1.6;margin-bottom:16px}
-.btn{font-family:inherit;border:none;cursor:pointer;font-weight:800;border-radius:14px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;padding:14px 22px;font-size:18px;box-shadow:0 4px 20px rgba(217,119,6,.4);transition:transform .12s,filter .12s;min-height:48px}
+.btn{font-family:inherit;border:none;cursor:pointer;font-weight:800;border-radius:14px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;padding:14px 22px;font-size:18px;box-shadow:0 4px 20px rgba(217,119,6,.4);transition:transform .18s cubic-bezier(.34,1.56,.64,1),filter .12s;min-height:48px}
 .btn:active{transform:scale(.94);filter:brightness(1.2)}
 .btn-big{font-size:24px;padding:16px 44px;min-height:60px}
 .btn-ghost{background:transparent;border:2px solid #6b561d;color:#d9c07a;margin-top:12px}
@@ -36,6 +36,8 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background
 .coin-btn:active{transform:scale(.9)}
 .coin-btn.pop{animation:coinPop .25s}
 @keyframes coinPop{40%{transform:scale(1.12) rotate(8deg)}}
+.coin-btn.rush{animation:rushGlow .5s ease-in-out infinite alternate}
+@keyframes rushGlow{from{box-shadow:0 0 30px rgba(251,191,36,.55),inset 0 0 30px rgba(0,0,0,.25)}to{box-shadow:0 0 80px rgba(253,230,138,.95),inset 0 0 30px rgba(0,0,0,.25)}}
 .coin-label{font-size:13px;color:#a08c50;letter-spacing:2px;text-transform:uppercase}
 .buy-row{display:flex;gap:8px}
 .buy-amt{font-size:16px;padding:10px 18px;min-height:44px;background:rgba(50,40,10,.9);border:2px solid #6b561d;color:#d9c07a;border-radius:12px;cursor:pointer;font-weight:800;font-family:inherit}
@@ -56,6 +58,12 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background
 .brow .buy{font-size:13px;font-weight:800;color:#1a1205;background:linear-gradient(160deg,#fbbf24,#d97706);border:none;border-radius:10px;padding:10px 12px;cursor:pointer;min-height:42px;white-space:nowrap;touch-action:manipulation}
 .brow .buy:active{transform:scale(.94)}
 .brow .buy.no{filter:grayscale(.85);opacity:.55}
+.brow .buy.afford{animation:affordPulse .5s}
+@keyframes affordPulse{40%{transform:scale(1.1);filter:brightness(1.4)}}
+.prestige-btn.ready{animation:readyPulse 1.4s ease-in-out infinite}
+@keyframes readyPulse{0%,100%{box-shadow:0 4px 20px rgba(217,119,6,.4)}50%{box-shadow:0 0 28px rgba(162,28,175,.9)}}
+.pfill.full{animation:pfillPulse 1.1s ease-in-out infinite}
+@keyframes pfillPulse{50%{filter:brightness(1.5)}}
 .brow .owned{font-size:14px;font-weight:900;color:#fbbf24;min-width:52px;text-align:center}
 .float{position:fixed;z-index:70;font-size:22px;font-weight:900;color:#fde68a;text-shadow:0 0 12px rgba(251,191,36,.8);pointer-events:none;animation:floatUp 0.9s ease-out forwards}
 @keyframes floatUp{0%{opacity:0;transform:translateY(10px) scale(.7)}15%{opacity:1;transform:translateY(0) scale(1.15)}100%{opacity:0;transform:translateY(-64px) scale(1)}}
@@ -88,7 +96,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background
   <div class="logo">👑</div>
   <h1 class="title">IDLE EMPIRE</h1>
   <p class="sub">Tap the coin, buy buildings, and grow an empire! Own 25, 50 or 100 of a building to double its output each time.</p>
-  <div class="best-box">🪙 Golden coins: <b id="startGold">0</b> · Income ×<b id="startMult">1</b><br>🏆 All-time earned: <b id="startAll">0</b></div>
+  <div class="best-box">🪙 Golden coins: <b id="startGold">0</b> · Income ×<b id="startMult">1</b><br>🏆 All-time earned: <b id="startAll">0</b><br>🏅 Deeds: <b id="startDeeds">0</b>/10 (+0%)<br>🛒 Caravans: <b id="startCar">0</b> · 🎁 Chests: <b id="startChest">0</b></div>
   <p class="tip">✨ Prestige for golden coins — each gives +10% income · 📴 Offline earnings: 50% rate, up to 8 hours · 💾 Auto-saves every 5 seconds</p>
   <button class="btn btn-big" id="btnPlay">▶ Play</button>
   <button class="btn btn-ghost" id="btnReset">New Run (keep golden coins)</button>
@@ -114,6 +122,9 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background
       <div class="pbar"><div class="pfill" id="pfill"></div></div>
       <div class="coin-label" id="pNext">Next 🪙 at 1.00M</div>
       <div class="coin-label" id="pPrev"></div>
+      <button class="btn" id="btnCaravan" style="display:none">🛒 Trade Caravan</button>
+      <div class="coin-label" id="chestRow">🎁 Chests: <span id="chestCount">0</span></div>
+      <button class="btn" id="btnChest" style="display:none">📦 Open Chest</button>
     </div>
     <div class="list-col" id="buildings"></div>
   </div>
@@ -142,6 +153,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background
 </div>
 
 <script>
+
 (function(){
 'use strict';
 var DEFS=[
@@ -156,17 +168,35 @@ var DEFS=[
   {n:'Galaxy',c:5100000000,i:260000,e:'🌌'},
   {n:'Empire',c:75000000000,i:1600000,e:'👑'}
 ];
-var S={coins:0,lifetime:0,alltime:0,owned:[0,0,0,0,0,0,0,0,0,0],gold:0,buy:1,last:Date.now()};
-var mult=1,rows=[],rowsBuilt=false,disp=0,lastTick=0,inGame=false;
+var S={coins:0,lifetime:0,alltime:0,owned:[0,0,0,0,0,0,0,0,0,0],gold:0,buy:1,deeds:[],trades:0,chests:0,last:Date.now()};
+var DEEDS=[
+  {n:'First Strike',d:function(){return S.alltime>=1e3;}},
+  {n:'Coin Hoarder',d:function(){return S.alltime>=1e5;}},
+  {n:'Millionaire',d:function(){return S.alltime>=1e6;}},
+  {n:'Billionaire',d:function(){return S.alltime>=1e9;}},
+  {n:'Trillionaire',d:function(){return S.alltime>=1e12;}},
+  {n:'Builder',d:function(){var t=0,i;for(i=0;i<DEFS.length;i++){t+=S.owned[i];}return t>=50;}},
+  {n:'Magnate',d:function(){var t=0,i;for(i=0;i<DEFS.length;i++){t+=S.owned[i];}return t>=150;}},
+  {n:'Full Board',d:function(){var i;for(i=0;i<DEFS.length;i++){if(S.owned[i]<1){return false;}}return true;}},
+  {n:'Limitless',d:function(){return S.gold>=10;}},
+  {n:'Empire Forever',d:function(){return S.gold>=50;}}
+];
+var mult=1,rows=[],rowsBuilt=false,disp=0,lastTick=0,inGame=false,rushT=0,rushNext=0,carDue=0,carEnd=0,carStake=0;
 var AC=null,muted=localStorage.getItem('ie_muted')==='1';
 function $(id){return document.getElementById(id);}
 var elCoins=$('coins'),elPersec=$('persec'),elGold=$('gold'),elTapPow=$('tapPow'),elPB=$('btnPrestige'),elPfill=$('pfill'),elPNext=$('pNext'),elPPrev=$('pPrev');
 function setText(el,v){if(el.textContent!==v){el.textContent=v;}}
+function setTxt(el,v){setText(el,v);}
 function show(id){var i,s=document.querySelectorAll('.screen');for(i=0;i<s.length;i++){s[i].classList.remove('s-active');}$(id).classList.add('s-active');}
 function ac(){if(!AC){var W=window;AC=new (W.AudioContext||W.webkitAudioContext)();}if(AC.state==='suspended'){AC.resume();}return AC;}
 function tone(f,d,type,vol,when){if(muted){return;}try{var a=ac(),o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.value=f;var t=a.currentTime+(when||0);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol||0.15,t+0.012);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.05);}catch(e){}}
+const SFXP={};['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
+const SFXMAP={buy:'tap',coin:'coin',mile:'levelup',prestige:'win',error:'buzz'};
 function sfx(n,p){
-  if(n==='coin'){var base=420+((p||0)%9)*22;tone(base,0.07,'square',0.07);}
+  if(muted){return;}
+  var m=SFXMAP[n]||n,a=SFXP[m];
+  if(a){try{a.currentTime=0;var q=a.play();if(q&&q.catch){q.catch(function(){});}}catch(e){}return;}
+  if(n==='coin'){tone(420+((p||0)%9)*22,0.07,'square',0.07);}
   else if(n==='buy'){tone(523.25,0.09,'triangle',0.14);tone(659.25,0.09,'triangle',0.14,0.07);tone(783.99,0.14,'triangle',0.14,0.14);}
   else if(n==='mile'){tone(659.25,0.12,'triangle',0.15);tone(880,0.12,'triangle',0.15,0.1);tone(1046.5,0.2,'triangle',0.15,0.2);}
   else if(n==='prestige'){tone(392,0.14,'triangle',0.16);tone(523.25,0.14,'triangle',0.16,0.12);tone(659.25,0.14,'triangle',0.16,0.24);tone(783.99,0.14,'triangle',0.16,0.36);tone(1046.5,0.4,'triangle',0.16,0.48);}
@@ -211,12 +241,26 @@ function milestoneMult(o){
   if(o>=25){return 2;}
   return 1;
 }
+function deedCount(){
+  var n=0,i;
+  for(i=0;i<DEEDS.length;i++){if(S.deeds[i]){n++;}}
+  return n;
+}
+function deedMult(){return 1+0.02*deedCount();}
+function checkDeeds(){
+  var i,a=0;
+  for(i=0;i<DEEDS.length;i++){
+    if(!S.deeds[i]&&DEEDS[i].d()){S.deeds[i]=true;a++;toast('🏅 Deed: '+DEEDS[i].n+' +2%');sfx('mile');}
+  }
+  if(a){save();setTxt($('startDeeds'),deedCount()+'/10 (+'+(deedCount()*2)+'%)');}
+  return a;
+}
 function incomePerSec(){
   var t=0,i;
   for(i=0;i<DEFS.length;i++){t+=DEFS[i].i*S.owned[i]*milestoneMult(S.owned[i]);}
-  return t*mult;
+  return t*mult*deedMult();
 }
-function tapPower(){return (1+S.owned[0]*0.5)*mult;}
+function tapPower(){return (1+S.owned[0]*0.5)*mult*(rushT>0?2:1);}
 function costOf(i,amt){
   var b=DEFS[i],o=S.owned[i];
   return b.c*Math.pow(1.15,o)*(Math.pow(1.15,amt)-1)/0.15;
@@ -243,6 +287,10 @@ function load(){
       S.coins=num(d.coins,0);S.lifetime=num(d.lifetime,0);S.alltime=num(d.alltime,0);S.gold=Math.floor(num(d.gold,0));S.last=num(d.last,Date.now());
       S.buy=(d.buy===1||d.buy===10||d.buy===25||d.buy===-1)?d.buy:1;
       for(i=0;i<DEFS.length;i++){S.owned[i]=Math.floor(num(d.owned&&d.owned[i],0));}
+      var dd=Array.isArray(d.deeds)?d.deeds:[];
+      for(i=0;i<DEEDS.length;i++){S.deeds[i]=dd[i]===true;}
+      S.trades=Math.floor(num(d.trades,0));
+      S.chests=Math.floor(num(d.chests,0));
     }
   }catch(e){}
   mult=Math.pow(1.1,S.gold);
@@ -259,7 +307,7 @@ function offlineProgress(){
   $('btnOfflineOk').textContent='💰 Collect '+fmt(gain);
   $('offlineModal').classList.add('open');
 }
-var cv=$('fx'),cx=cv.getContext('2d'),P=[],PFree=[],PMAX=420,FW=0,FH=0;
+var cv=$('fx'),cx=cv.getContext('2d'),P=[],PFree=[],PMAX=420,FW=0,FH=0,fxDrawn=false;
 var GOLDS=['#fde68a','#fbbf24','#f59e0b','#fff7e0'];
 function getP(){if(PFree.length){return PFree.pop();}if(P.length<PMAX){return {};}}
 function killP(i){var q=P[i];P[i]=P[P.length-1];P.pop();PFree.push(q);}
@@ -308,17 +356,20 @@ function frame(ts){
   if(!lastFrame){lastFrame=ts;}
   var dt=Math.min((ts-lastFrame)/1000,0.05);lastFrame=ts;
   logicStep();
-  cx.clearRect(0,0,FW,FH);
-  var i,p;
-  for(i=P.length-1;i>=0;i--){
-    p=P[i];p.t+=dt;
-    if(p.t>=p.life){killP(i);continue;}
-    p.vy+=p.g*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;
-    var a=1-p.t/p.life;
-    cx.globalAlpha=a;cx.fillStyle=p.c;
-    cx.beginPath();cx.arc(p.x,p.y,p.s*(0.5+a*0.5),0,6.2832);cx.fill();
+  if(P.length||fxDrawn){
+    cx.clearRect(0,0,FW,FH);
+    fxDrawn=P.length>0;
+    var i,p;
+    for(i=P.length-1;i>=0;i--){
+      p=P[i];p.t+=dt;
+      if(p.t>=p.life){killP(i);continue;}
+      p.vy+=p.g*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;
+      var a=1-p.t/p.life;
+      cx.globalAlpha=a;cx.fillStyle=p.c;
+      cx.beginPath();cx.arc(p.x,p.y,p.s*(0.5+a*0.5),0,6.2832);cx.fill();
+    }
+    cx.globalAlpha=1;
   }
-  cx.globalAlpha=1;
   var diff=S.coins-disp;
   if(Math.abs(diff)<0.5){disp=S.coins;}else{disp+=diff*Math.min(1,dt*10);}
   setText(elCoins,fmt(disp));
@@ -334,6 +385,7 @@ function updatePBar(){
   if(!(pr>=0)){pr=0;}if(pr>1){pr=1;}
   var w=(pr*100).toFixed(1)+'%';
   if(lastPW!==w){lastPW=w;elPfill.style.width=w;}
+  elPfill.classList.toggle('full',g>=1);
   setText(elPNext,'Next 🪙 at '+fmt(hi));
   setText(elPPrev,g>=1?'✨ Now: ×'+mult.toFixed(2)+' → ×'+Math.pow(1.1,S.gold+g).toFixed(2)+' income':'');
 }
@@ -383,7 +435,7 @@ function updateRows(){
     s=(S.buy===-1?'MAX×':'×')+amt+' · '+fmt(c);
     setText(r.buy,s);
     ok=S.coins>=c;
-    if(ok&&r.no){r.no=false;r.buy.classList.remove('no');}
+    if(ok&&r.no){r.no=false;r.buy.classList.remove('no');r.buy.classList.remove('afford');void r.buy.offsetWidth;r.buy.classList.add('afford');}
     else if(!ok&&!r.no){r.no=true;r.buy.classList.add('no');}
   }
 }
@@ -396,6 +448,14 @@ function buyBuilding(i){
   S.coins-=c;
   S.owned[i]+=amt;
   sfx('buy');vib(12);
+  if(Math.random()<0.07){
+    S.chests++;
+    setTxt($('chestCount'),S.chests);
+    toast('🎁 A treasure chest dropped!');
+    sfx('pop');
+    if(S.chests===5||S.chests===15||S.chests===30){toast('🎁 TREASURE HOARDER ×'+S.chests+'!');sfx('mile');}
+    save();
+  }
   var r=rows[i];
   if(r){
     r.row.classList.remove('flash');
@@ -432,7 +492,36 @@ function tapCoin(e){
   }
   updateHud();
 }
+function startTrade(){
+  if(carEnd||S.coins<1000){sfx('error');vib(30);return;}
+  var stake=Math.min(S.coins,Math.max(1000,Math.floor(S.coins*0.25)));
+  S.coins-=stake;
+  carStake=stake;
+  carEnd=Date.now()+60000;
+  sfx('tap');vib(14);
+  toast('🛒 Caravan departed with '+fmt(stake)+' coins · returns in 60s');
+  cacheRects();
+  save();
+  updateHud();
+}
+function openChest(){
+  if(!S.chests){sfx('error');return;}
+  var loot=Math.max(1,Math.floor(incomePerSec()*30*(0.5+Math.random()*1.5)));
+  S.chests--;
+  S.coins+=loot;
+  setTxt($('chestCount'),S.chests);
+  setTxt($('startChest'),S.chests);
+  toast('📦 Chest opened: +'+fmt(loot)+' coins!');
+  sfx('levelup');vib(18);
+  if(coinRect){
+    burst(coinRect.left+coinRect.width/2,coinRect.top+coinRect.height/2,14,170,260,0.7,3);
+    floater(coinRect.left+coinRect.width/2,coinRect.top,'+'+fmt(loot)+' 📦');
+  }
+  updateHud();
+  save();
+}
 function doPrestige(){
+  if(carEnd){carEnd=0;carStake=0;toast('🛒 Your caravan was lost in the reset…');}
   var g=prestigeGain();
   if(g<1){sfx('error');return;}
   sfx('prestige');vib([20,50,20,50,40]);
@@ -461,6 +550,7 @@ function updateHud(){
   var g=prestigeGain();
   setText(elPB,'✨ Prestige +'+g+' 🪙');
   if(elPB.disabled!==(g<1)){elPB.disabled=g<1;}
+  elPB.classList.toggle('ready',g>=1);
   updateRows();
 }
 function logicStep(){
@@ -472,16 +562,72 @@ function logicStep(){
     dt=Math.min(dt,8*3600);rate=0.5;
     if(dt>300){toast('⏳ Welcome back! +'+fmt(incomePerSec()*0.5*dt));}
   }
+  if(rushT>0){
+    rushT=Math.max(0,rushT-dt);
+    if(rushT===0){$('coinBtn').classList.remove('rush');}
+  }
+  if(rushT===0&&nowT>=rushNext){
+    rushT=12;rushNext=nowT+(45+Math.random()*45)*1000;
+    toast('✨ GOLDEN RUSH! ×2 taps (12s)');
+    sfx('levelup');
+    $('coinBtn').classList.add('rush');
+  }
+  if(carEnd&&nowT>=carEnd){
+    var pay=Math.floor(carStake*(1.5+Math.random()*0.9));
+    S.coins+=pay;
+    carEnd=0;carStake=0;
+    S.trades++;
+    setTxt($('startCar'),S.trades);
+    toast('💰 Caravan delivered +'+fmt(pay)+' coins!');
+    sfx('win');vib([20,40,20,40,30]);
+    confetti();
+    floater(FW/2,FH*0.35,'+'+fmt(pay)+' 🛒');
+    if(S.trades===5||S.trades===15||S.trades===30){toast('🛒 TRADE MASTER ×'+S.trades+'!');sfx('mile');}
+    save();
+    carDue=nowT+(150+Math.random()*150)*1000;
+  }
+  if(!carEnd&&carDue&&nowT>=carDue){
+    if(S.coins>=1000){
+      carDue=0;
+      toast('🛒 The Caravan has arrived!');
+      sfx('whoosh');
+      $('btnCaravan').style.display='';
+    }else{
+      carDue=nowT+30000;
+    }
+  }
   var inc=incomePerSec()*dt*rate;
   if(inc>0){S.coins+=inc;S.lifetime+=inc;S.alltime+=inc;}
+  checkDeeds();
 }
 function updateHudFrame(){
   setText(elPersec,fmt(incomePerSec()));
   var g=prestigeGain();
   setText(elPB,'✨ Prestige +'+g+' 🪙');
   if(elPB.disabled!==(g<1)){elPB.disabled=g<1;}
+  elPB.classList.toggle('ready',g>=1);
   updateRows();
   updatePBar();
+  var nowT=Date.now();
+  var bc=$('btnCaravan'),bk=$('btnChest');
+  if(carEnd){
+    bc.style.display='';
+    bc.disabled=true;
+    setText(bc,'⏳ Caravan returns in '+Math.max(0,Math.ceil((carEnd-nowT)/1000))+'s');
+  }else if(carDue===0&&S.coins>=1000){
+    bc.style.display='';
+    bc.disabled=false;
+    setText(bc,'🛒 Trade Caravan');
+  }else{
+    bc.style.display='none';
+  }
+  if(S.chests>0){
+    bk.style.display='';
+    bk.disabled=false;
+    setText(bk,'📦 Open Chest ×'+S.chests);
+  }else{
+    bk.style.display='none';
+  }
 }
 function startGame(){
   show('s-game');
@@ -489,14 +635,22 @@ function startGame(){
   disp=S.coins;
   inGame=true;
   lastTick=Date.now();
+  rushNext=Date.now()+(45+Math.random()*45)*1000;
+  carDue=Date.now()+(150+Math.random()*150)*1000;
+  setTxt($('chestCount'),S.chests);
   cacheRects();
   updateHud();
 }
 function init(){
   load();
+  checkDeeds();
   $('startGold').textContent=S.gold;
   $('startMult').textContent=mult.toFixed(2);
   $('startAll').textContent=fmt(S.alltime);
+  $('startDeeds').textContent=deedCount()+'/10 (+'+(deedCount()*2)+'%)';
+  $('startCar').textContent=S.trades;
+  $('startChest').textContent=S.chests;
+  $('chestCount').textContent=S.chests;
   var hasSave=false;
   try{hasSave=!!localStorage.getItem('ie_state');}catch(e){}
   $('btnPlay').textContent=hasSave?'▶ Continue':'▶ Play';
@@ -519,6 +673,8 @@ function init(){
   });
   $('btnContinue').addEventListener('click',function(){sfx('buy');startGame();});
   $('btnPrestige').addEventListener('click',doPrestige);
+  $('btnCaravan').addEventListener('click',startTrade);
+  $('btnChest').addEventListener('click',openChest);
   $('btnOfflineOk').addEventListener('click',function(){
     $('offlineModal').classList.remove('open');
     sfx('prestige');
