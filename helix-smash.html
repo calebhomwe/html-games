@@ -191,6 +191,9 @@ try { best = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) {}
 try { ringBest = parseInt(localStorage.getItem(KEY + '-rings') || '0', 10) || 0; } catch (e) {}
 let comboRec = 0, runComboBest = 0, recCeleb = false;
 try { comboRec = parseInt(localStorage.getItem(KEY + '-combo') || '0', 10) || 0; } catch (e) {}
+let gemsRun = 0, gemMilestone = 0, gemsBestRun = 0, gemEverTotal = 0;
+try { gemsBestRun = parseInt(localStorage.getItem(KEY + '-gemsbest') || '0', 10) || 0; } catch (e) {}
+try { gemEverTotal = parseInt(localStorage.getItem(KEY + '-gemsever') || '0', 10) || 0; } catch (e) {}
 
 function rand(a, b) { return a + Math.random() * (b - a); }
 function py(i) { return i * GAP - camY; }
@@ -267,7 +270,7 @@ function ensureWorld(n) {
 function startGame() {
   initWorld();
   trail = []; rings = [];
-  cur = 0; combo = 0; score = 0; squash = 0; shake = 0; vy = 0; shield = 0; fever = 0; ringGot = 0; runComboBest = 0; recCeleb = false; magnet = 0;
+  cur = 0; combo = 0; score = 0; squash = 0; shake = 0; vy = 0; shield = 0; fever = 0; ringGot = 0; runComboBest = 0;   recCeleb = false; magnet = 0; gemsRun = 0; gemMilestone = 0;
   by = ballRestY(0); camY = by - desired;
   phase = 'resting';
   updateHUD();
@@ -281,6 +284,7 @@ function updateHUD() {
   $('score').textContent = score;
   $('combo').textContent = combo > 0 ? 'x' + combo : '\u2014';
   $('best').textContent = best;
+  $('gems').textContent = gemsRun;
 }
 function endGame() {
   const nb = score > best;
@@ -294,6 +298,13 @@ function endGame() {
     sfx('win');
   }
   $('comboInfo').textContent = 'Best Combo: ×' + comboRec + (nr ? '  🏆 NEW!' : '');
+  const ngr = gemsRun > gemsBestRun;
+  if (ngr) {
+    gemsBestRun = gemsRun;
+    try { localStorage.setItem(KEY + '-gemsbest', String(gemsBestRun)); } catch (e) {}
+  }
+  try { localStorage.setItem(KEY + '-gemsever', String(gemEverTotal)); } catch (e) {}
+  $('gemInfo').textContent = '💎 Best Gem Run: ' + gemsBestRun + ' (' + gemMilestone + ' bonuses) · Ever: ' + gemEverTotal + (ngr ? '  🏆 NEW!' : '');
   $('gameover').classList.remove('hidden');
 }
 function die() {
@@ -415,6 +426,14 @@ function update(dt) {
         buzz(14);
         burst(gx, gsy, '#67e8f9', 10, 180);
         addRing(gx, gsy, '#67e8f9');
+        gemsRun++; gemEverTotal++;
+        if (gemsRun % 10 === 0) {
+          gemMilestone++;
+          score += 2 * gemsRun;
+          addFloater('💎 GEM MASTER ×' + gemsRun + ' +' + (2 * gemsRun), gx, gsy - 30, '#f0abfc');
+          sfx('levelup');
+          buzz(16);
+        }
         updateHUD();
       }
     }
