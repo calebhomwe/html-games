@@ -428,6 +428,9 @@ var nowMs=Date.now;
 function strNow(){ return function(){ return Date.now(); }; }
 
 /* ============================== STATE ============================== */
+/* Anchors the in-game clock so a new island starts on Day 1 at 08:00. gameMinutes() otherwise counts from the
+   Unix epoch and the HUD reads "Day 3733012". */
+function startOffsetMin(){ return 8*60-(nowMs()/1000)*MIN_PER_REAL_SEC; }
 function defaultState(){
   return {
     name:"Mochi", avatar:0, shirt:0, seenIntro:false,
@@ -440,7 +443,7 @@ function defaultState(){
     trees:{}, rocks:{}, plots:{},
     quest:null,
     stats:{bugs:0,fish:0,digs:0,harvests:0,shakes:0,bellsEarned:0,placed:0},
-    offsetMin:0, muted:false, lastSave:nowMs()
+    offsetMin:startOffsetMin(), muted:false, lastSave:nowMs()
   };
 }
 var state=defaultState();
@@ -454,7 +457,7 @@ function mergeSave(s){
   st.seenIntro=!!s.seenIntro;
   st.bells=Math.max(0,nr(s.bells,500));
   st.day=Math.max(1,Math.floor(nr(s.day,1)));
-  st.offsetMin=nr(s.offsetMin,0);
+  st.offsetMin=s.offsetMin?nr(s.offsetMin,0):startOffsetMin(); /* saves from before the anchor (0) start over at Day 1 */
   st.muted=!!s.muted;
   ["net","rod","shovel","can","axe","sling"].forEach(function(t){
     st.tools[t]=!(s.tools[t]===false);
