@@ -2095,4 +2095,23 @@ function init(){
 }
 load();
 init();
+/* Read-only hook for tools/harness/play.mjs: phase, bells, stats and the nearest tree / bug / water tile in
+   screen pixels. It changes nothing in the game. */
+window.__harness=function(){
+  var rect=cv.getBoundingClientRect();
+  function sc(x,y){ return [Math.round(rect.left+x*TILE/CW*rect.width),Math.round(rect.top+y*TILE/CH*rect.height)]; }
+  function near(list){ var best=null,bd=1e9; for(var i=0;i<list.length;i++){ var d=dist(player.x,player.y,list[i].x,list[i].y); if(d<bd){ bd=d; best=list[i]; } } return best?{x:best.x,y:best.y,d:bd}:null; }
+  var t=near(trees.filter(function(tr){ return !tr.shook&&!tr.fell; }).map(function(tr){ return {x:tr.x+0.5,y:tr.y+0.5}; }));
+  var b=near(bugs);
+  var w=null,wd=1e9;
+  for(var y=0;y<MGY;y++) for(var x=0;x<MGX;x++){ if(tileAt(x,y)==="~"){ var d=dist(player.x,player.y,x+0.5,y+0.5); if(d<wd){ wd=d; w={x:x+0.5,y:y+0.5}; } } }
+  return {
+    phase:$("ovIntro").classList.contains("hidden")?"playing":"menu",
+    bells:state.bells, day:state.day, bag:state.bag.length, vibe:Math.round(state.vibe),
+    bugs:state.stats.bugs, fish:state.stats.fish, digs:state.stats.digs, harvests:state.stats.harvests,
+    shakes:state.stats.shakes, bellsEarned:state.stats.bellsEarned, tool:state.tool,
+    px:Math.round(player.x*10)/10, py:Math.round(player.y*10)/10, anyOpen:anyOpen(),
+    tree:t?sc(t.x,t.y):null, bug:b?sc(b.x,b.y):null, bugNear:b?{d:Math.round(b.d*10)/10}:null, water:w?sc(w.x,w.y):null
+  };
+};
 })();
