@@ -1,0 +1,74 @@
+name: smoke
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright + Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Headless load check
+        run: node .github/smoke.mjs $(ls *.html)
+
+  # Drives every game the hub lists for a few seconds with a generic policy (keys, clicks, drags, buttons) and
+  # fails on page errors, NaN/undefined text, same-origin 4xx (including a dead "Hub" back link) or a wrong card count.
+  harness-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright + Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Sweep every game (5 s each)
+        run: node tools/harness/play.mjs --mode sweep --secs 5
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: harness-out-sweep
+          path: harness-out
+
+  # Plays the four profiled games like a player (game-specific policies) and fails on page errors, NaN/undefined
+  # or out-of-bounds state, illegal phase transitions, stuck play, no progression or a failed restart.
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        game: [survivor-wave, chess, isle-of-bells, math-battle]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright + Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Play (default, 2 episodes)
+        run: node tools/harness/play.mjs --game ${{ matrix.game }} --mode default --episodes 2 --secs 40
+      - name: Play (mobile, touch)
+        run: node tools/harness/play.mjs --game ${{ matrix.game }} --mode mobile --episodes 1 --secs 30
+      - name: Play (localStorage blocked)
+        run: node tools/harness/play.mjs --game ${{ matrix.game }} --mode storage-blocked --episodes 1 --secs 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: harness-out-${{ matrix.game }}
+          path: harness-out

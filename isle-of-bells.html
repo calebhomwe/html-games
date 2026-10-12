@@ -88,7 +88,7 @@
 </style>
 </head>
 <body>
-<a class="back" href="../index.html">← Hub</a>
+<a class="back" href="index.html">← Hub</a>
 <div id="stage"><canvas id="game"></canvas></div>
 
 <div id="hud">
@@ -428,6 +428,9 @@ var nowMs=Date.now;
 function strNow(){ return function(){ return Date.now(); }; }
 
 /* ============================== STATE ============================== */
+/* Anchors the in-game clock so a new island starts on Day 1 at 08:00. gameMinutes() otherwise counts from the
+   Unix epoch and the HUD reads "Day 3733012". */
+function startOffsetMin(){ return 8*60-(nowMs()/1000)*MIN_PER_REAL_SEC; }
 function defaultState(){
   return {
     name:"Mochi", avatar:0, shirt:0, seenIntro:false,
@@ -440,7 +443,7 @@ function defaultState(){
     trees:{}, rocks:{}, plots:{},
     quest:null,
     stats:{bugs:0,fish:0,digs:0,harvests:0,shakes:0,bellsEarned:0,placed:0},
-    offsetMin:0, muted:false, lastSave:nowMs()
+    offsetMin:startOffsetMin(), muted:false, lastSave:nowMs()
   };
 }
 var state=defaultState();
@@ -454,7 +457,7 @@ function mergeSave(s){
   st.seenIntro=!!s.seenIntro;
   st.bells=Math.max(0,nr(s.bells,500));
   st.day=Math.max(1,Math.floor(nr(s.day,1)));
-  st.offsetMin=nr(s.offsetMin,0);
+  st.offsetMin=s.offsetMin?nr(s.offsetMin,0):startOffsetMin(); /* saves from before the anchor (0) start over at Day 1 */
   st.muted=!!s.muted;
   ["net","rod","shovel","can","axe","sling"].forEach(function(t){
     st.tools[t]=!(s.tools[t]===false);
@@ -2507,6 +2510,25 @@ function init(){
 }
 load();
 init();
+/* Read-only hook for tools/harness/play.mjs: phase, bells, stats and the nearest tree / bug / water tile in
+   screen pixels. It changes nothing in the game. */
+window.__harness=function(){
+  var rect=cv.getBoundingClientRect();
+  function sc(x,y){ return [Math.round(rect.left+x*TILE/CW*rect.width),Math.round(rect.top+y*TILE/CH*rect.height)]; }
+  function near(list){ var best=null,bd=1e9; for(var i=0;i<list.length;i++){ var d=dist(player.x,player.y,list[i].x,list[i].y); if(d<bd){ bd=d; best=list[i]; } } return best?{x:best.x,y:best.y,d:bd}:null; }
+  var t=near(trees.filter(function(tr){ return !tr.shook&&!tr.fell; }).map(function(tr){ return {x:tr.x+0.5,y:tr.y+0.5}; }));
+  var b=near(bugs);
+  var w=null,wd=1e9;
+  for(var y=0;y<MGY;y++) for(var x=0;x<MGX;x++){ if(tileAt(x,y)==="~"){ var d=dist(player.x,player.y,x+0.5,y+0.5); if(d<wd){ wd=d; w={x:x+0.5,y:y+0.5}; } } }
+  return {
+    phase:$("ovIntro").classList.contains("hidden")?"playing":"menu",
+    bells:state.bells, day:state.day, bag:state.bag.length, vibe:Math.round(state.vibe),
+    bugs:state.stats.bugs, fish:state.stats.fish, digs:state.stats.digs, harvests:state.stats.harvests,
+    shakes:state.stats.shakes, bellsEarned:state.stats.bellsEarned, tool:state.tool,
+    px:Math.round(player.x*10)/10, py:Math.round(player.y*10)/10, anyOpen:anyOpen(),
+    tree:t?sc(t.x,t.y):null, bug:b?sc(b.x,b.y):null, bugNear:b?{d:Math.round(b.d*10)/10}:null, water:w?sc(w.x,w.y):null
+  };
+};
 })();
 </script>
 </body>
