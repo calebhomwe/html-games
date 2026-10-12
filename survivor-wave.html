@@ -353,6 +353,8 @@ background-repeat:no-repeat}
 
 <script>
 'use strict';/*BAL-PATCH-R2*/
+/* localStorage can throw (private mode, blocked cookies); without this the whole script died at load. */
+const LS={get:k=>{try{return localStorage.getItem(k);}catch(e){return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 let W,H,DPR;var lowFxNow=false;
 function resize(){
@@ -534,14 +536,14 @@ const META={
   sanguine:{name:'Sanguine Charm',icon:'🩸',desc:'Heal +0.3 HP per kill per level',max:5,cost:l=>Math.floor(75*Math.pow(2.5,l))},
 };
 let metaLv={};
-try{metaLv=JSON.parse(localStorage.getItem('survivorMeta'))||{};for(const k in metaLv){if(typeof metaLv[k]!=='number'||!isFinite(metaLv[k]))delete metaLv[k];}}catch(_){metaLv={};}
+try{metaLv=JSON.parse(LS.get('survivorMeta'))||{};for(const k in metaLv){if(typeof metaLv[k]!=='number'||!isFinite(metaLv[k]))delete metaLv[k];}}catch(_){metaLv={};}
 /* chapters */
 let sioc={stage:1,stars:{}};
-let echoBest=+localStorage.getItem('survivorEchoBest')||0;let echoMode=false;/* ECHO-PATCH-R1 */let echoDmg=0,echoMst=60;
+let echoBest=+LS.get('survivorEchoBest')||0;let echoMode=false;/* ECHO-PATCH-R1 */let echoDmg=0,echoMst=60;
 /* DAILY-PATCH-R2 : Challenge of the Day */
 function dailySeed(){const d=new Date();return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();}
 const DK='survivorDailyDone'+dailySeed();
-let dailyDone=localStorage.getItem(DK)==='1';
+let dailyDone=LS.get(DK)==='1';
 let dailyActive=false,dailyMod=null;
 const DMODS=[
   {n:'SWARM DAY',d:'+40% spawns, +50% gold',sp:1.4,gd:1.5},
@@ -553,32 +555,32 @@ const DMODS=[
   {n:'LUCKY DAY',d:'Double drops',gd:2.0}
 ];
 const DMOD=DMODS[dailySeed()%DMODS.length];
-try{sioc=JSON.parse(localStorage.getItem('survivorChapters'))||{};}catch(_){sioc={};}
+try{sioc=JSON.parse(LS.get('survivorChapters'))||{};}catch(_){sioc={};}
 sioc.stage=sioc.stage||1;
 if(!sioc.stars)sioc.stars={};
 let chapterSel=sioc.stage||1;
 let extraBossDone=false;
 let gold=0;
-try{gold=+localStorage.getItem('survivorGold')||0;}catch(_){gold=0;}
+try{gold=+LS.get('survivorGold')||0;}catch(_){gold=0;}
 /* patrol-daily */
 let siop={last:0};
-try{siop=JSON.parse(localStorage.getItem('siop'))||{last:0};}catch(_){siop={last:0};}
+try{siop=JSON.parse(LS.get('siop'))||{last:0};}catch(_){siop={last:0};}
 if(!(typeof siop.last==='number'&&siop.last>0))siop.last=Date.now();
 let siod={signin:'',tile:0,streak:0};
-try{var pdTmp=JSON.parse(localStorage.getItem('survivorDaily'));if(pdTmp)siod=pdTmp;}catch(_){siod={signin:'',tile:0,streak:0};}
+try{var pdTmp=JSON.parse(LS.get('survivorDaily'));if(pdTmp)siod=pdTmp;}catch(_){siod={signin:'',tile:0,streak:0};}
 siod.tile=(typeof siod.tile==='number'&&siod.tile>=0&&siod.tile<=7)?siod.tile:0;
 siod.streak=siod.streak|0;
 let pdPending=0,pdJustClaimed='';
 /* MISSIONS persistent state {set:[{id,goal,pts,prog}],bar,tier,cycle} */
 let missions={set:[],bar:0,tier:0,cycle:0};
 try{
-  const msRaw=JSON.parse(localStorage.getItem('survivorMissions')||'null');
+  const msRaw=JSON.parse(LS.get('survivorMissions')||'null');
   if(msRaw&&Array.isArray(msRaw.set)&&msRaw.set.length===4&&typeof msRaw.bar==='number'&&msRaw.set.every(function(m){return m&&typeof m.id==='string'&&typeof m.prog==='number'&&typeof m.goal==='number'&&typeof m.pts==='number';}))missions=msRaw;
 }catch(_){missions={set:[],bar:0,tier:0,cycle:0};}
 /* [[ACH]] persistent state  (R1-ACH-PATCH-v1) */
 let achieves={done:{},lifeK:0,lifeE:0,lifeB:0,lifeG:0,lifeW:0,_pk:0,_pe:0,_pb:0};
 try{
-  const acRaw=JSON.parse(localStorage.getItem('survivorAchievements')||'null');
+  const acRaw=JSON.parse(LS.get('survivorAchievements')||'null');
   if(acRaw&&typeof acRaw==='object'){
     achieves=Object.assign({done:{},lifeK:0,lifeE:0,lifeB:0,lifeG:0,lifeW:0,_pk:0,_pe:0,_pb:0},acRaw);
     if(!achieves.done||typeof achieves.done!=='object')achieves.done={};
@@ -586,14 +588,14 @@ try{
   }
 }catch(_){/* fresh */}
 let achT=0,_achTM=null;
-let selectedHero=localStorage.getItem('survivorHero')||'survivor';
+let selectedHero=LS.get('survivorHero')||'survivor';
 if(!HEROES[selectedHero])selectedHero='survivor';
 function saveMeta(){
   try{
-    localStorage.setItem('survivorMeta',JSON.stringify(metaLv));
-    localStorage.setItem('survivorGold',gold);
-    localStorage.setItem('survivorHero',selectedHero);
-    localStorage.setItem('survivorAchievements',JSON.stringify(achieves));
+    LS.set('survivorMeta',JSON.stringify(metaLv));
+    LS.set('survivorGold',gold);
+    LS.set('survivorHero',selectedHero);
+    LS.set('survivorAchievements',JSON.stringify(achieves));
   }catch(_){}
 }
 function goldEarned(){
@@ -736,7 +738,7 @@ const cam={x:0,y:0};
 let enemies=[],projectiles=[],eprojs=[],gems=[],pickups=[],zones=[],particles=[],floaters=[],bolts=[],decals=[],corpses=[];
 let gameTime=0,spawnT=0,elapsed=0,difficulty=1;
 let state='ready';
-let best=+localStorage.getItem('survivorBest2')||0;
+let best=+LS.get('survivorBest2')||0;
 let pendingLevelUps=0,rerollsLeft=1;
 let shake=0,hitStop=0,redFlash=0,whiteFlash=0,killsPulse=0;
 let nextElite=70,nextHorde=80,nextBoss=150,nextRush=210,bossCount=0,eliteCount=0,bossSpawnN=0,goldRush=false;
@@ -755,11 +757,11 @@ let score=0;
 let paused=false;
 let endless=false;
 let settings={shake:true,flash:true,floaters:true,haptics:true,sfxVol:1,musicVol:0.6,lowFx:false};
-try{const st2=JSON.parse(localStorage.getItem('survivorSettings'));if(st2)settings=Object.assign(settings,st2);}catch(_){}
+try{const st2=JSON.parse(LS.get('survivorSettings'));if(st2)settings=Object.assign(settings,st2);}catch(_){}
 settings.sfxVol=isFinite(+settings.sfxVol)?Math.min(1,Math.max(0,+settings.sfxVol)):1;
 settings.musicVol=isFinite(+settings.musicVol)?Math.min(1,Math.max(0,+settings.musicVol)):0.6;
-try{Object.assign(settings,JSON.parse(localStorage.getItem('survivorSettings')||'{}'));}catch(_){}
-function saveSettings(){try{localStorage.setItem('survivorSettings',JSON.stringify(settings));}catch(_){}}
+try{Object.assign(settings,JSON.parse(LS.get('survivorSettings')||'{}'));}catch(_){}
+function saveSettings(){try{LS.set('survivorSettings',JSON.stringify(settings));}catch(_){}}
 function buzz(ms){if(settings.haptics&&navigator.vibrate){try{navigator.vibrate(ms);}catch(_){}}}
 function sweep(arr,keep){let j=0;for(let i=0;i<arr.length;i++){if(keep(arr[i]))arr[j++]=arr[i];}arr.length=j;}
 function randVisible(pad){let n=0,pick=null;for(const e of enemies){if(e.hp>0&&onScreen(e,pad)){n++;if(Math.random()<1/n)pick=e;}}return pick;}
@@ -1194,7 +1196,7 @@ function gameOver(){
   Music.stop();
   const sc=finalScore();
   const isNew=sc>best;
-  if(isNew){best=sc;localStorage.setItem('survivorBest2',sc);}
+  if(isNew){best=sc;LS.set('survivorBest2',sc);}
   document.getElementById('finTime').textContent=fmtTime(gameTime);
   document.getElementById('finKills').textContent=player.kills;
   document.getElementById('finLevel').textContent=player.level;
@@ -1216,7 +1218,7 @@ function victory(){
   sfx('win');
   const sc=finalScore()+2000;
   const isNew=sc>best;
-  if(isNew){best=sc;localStorage.setItem('survivorBest2',sc);}
+  if(isNew){best=sc;LS.set('survivorBest2',sc);}
   document.getElementById('winKills').textContent=player.kills;
   document.getElementById('winLevel').textContent=player.level;
   document.getElementById('winScore').textContent=sc;
@@ -1236,11 +1238,11 @@ function victory(){
   if(chBonus>0){gold+=chBonus;}
   if(cn===sioc.stage&&sioc.stage<12)sioc.stage++;
   saveMeta();
-  try{localStorage.setItem('survivorChapters',JSON.stringify(sioc));}catch(_){}
+  try{LS.set('survivorChapters',JSON.stringify(sioc));}catch(_){}
   const wsEl=document.getElementById('winStars');
   if(wsEl)wsEl.textContent=(cst.clr+cst.slay)>0?'\u2605'.repeat(cst.clr+cst.slay):'';
   if(chBonus>0){const wg=document.getElementById('winGold');wg.textContent=gEarn+' (+'+chBonus+' FIRST CLEAR)';}
-  /* DAILY-PATCH-R2 */if(dailyActive&&!dailyDone){dailyDone=true;try{localStorage.setItem(DK,'1');}catch(_){}gold+=600;const wg2=document.getElementById('winGold');if(wg2)wg2.textContent+=' (+150 DAILY CHEST)';}
+  /* DAILY-PATCH-R2 */if(dailyActive&&!dailyDone){dailyDone=true;try{LS.set(DK,'1');}catch(_){}gold+=600;const wg2=document.getElementById('winGold');if(wg2)wg2.textContent+=' (+150 DAILY CHEST)';}
   dailyActive=false;
   Music.stop();
   showEl('win');
@@ -2306,7 +2308,7 @@ document.getElementById('chestBtn').onclick=()=>{
 };
 
 /* ============================== AUDIO ============================== */
-let audioCtx,muted=localStorage.getItem('survivorMute')==='1';
+let audioCtx,muted=LS.get('survivorMute')==='1';
 function resumeAudio(){try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();}catch(e){}}
 const SFXP={};
 ['tap','pop','coin','hit','boom','jump','whoosh','win','lose','buzz','levelup','tick'].forEach(function(n){try{var a=new Audio('assets/sfx/'+n+'.wav');a.preload='auto';a.volume=0.5;SFXP[n]=a}catch(e){}});
@@ -2324,7 +2326,7 @@ function sfx(n){
   try{a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}
 }
 function refreshMute(){document.getElementById('muteBtn').textContent=muted?'🔇':'🔊';}
-document.getElementById('muteBtn').onclick=()=>{muted=!muted;localStorage.setItem('survivorMute',muted?'1':'0');refreshMute();};
+document.getElementById('muteBtn').onclick=()=>{muted=!muted;LS.set('survivorMute',muted?'1':'0');refreshMute();};
 refreshMute();
 const Music={
   playing:false,timer:null,step:0,nextT:0,gain:null,real:false,realEl:null,
@@ -5012,7 +5014,7 @@ const MSN_CHESTS=[30,45,60,90,150];
 
 let msSaveT=0;
 
-function saveMissions(){try{localStorage.setItem('survivorMissions',JSON.stringify(missions));}catch(_){}}
+function saveMissions(){try{LS.set('survivorMissions',JSON.stringify(missions));}catch(_){}}
 
 function msShuffle(a){
 
@@ -5323,14 +5325,14 @@ function renderSettings(){
     list.appendChild(row);
   }
 }
-let tutDone=localStorage.getItem('survivorTut')==='1',tutGem=false,tutPick=false,tutT=null;
+let tutDone=LS.get('survivorTut')==='1',tutGem=false,tutPick=false,tutT=null;
 function tutShow(msg){
   if(tutDone)return;
   const el=document.getElementById('tut');if(!el)return;
   el.textContent=msg;el.classList.remove('hidden');
   clearTimeout(tutT);tutT=setTimeout(()=>el.classList.add('hidden'),4000);
 }
-function tutFinish(){tutDone=true;try{localStorage.setItem('survivorTut','1');}catch(_){}}
+function tutFinish(){tutDone=true;try{LS.set('survivorTut','1');}catch(_){}}
 document.getElementById('shopBtn').onclick=()=>{renderShop();showEl('shopOv');};
 /* chapters */
 function renderChapters(){
@@ -5429,7 +5431,7 @@ function echoEnd(){
   const total=Math.round(echoDmg);
   if(total>echoBest){
     echoBest=total;
-    try{localStorage.setItem('survivorEchoBest',total);}catch(_){}
+    try{LS.set('survivorEchoBest',total);}catch(_){}
   }
   document.getElementById('echoResultTxt').textContent=total.toLocaleString()+' dmg \u2014 BEST '+echoBest.toLocaleString();
   document.getElementById('echoResDiv').classList.remove('hidden');
@@ -5465,7 +5467,7 @@ renderHeroes();
       pdJustClaimed='📅 Streak safe — come back tomorrow!';
     }
     siod.signin=pdToday;
-    try{localStorage.setItem('survivorDaily',JSON.stringify({signin:siod.signin,tile:siod.tile,streak:siod.streak}));}catch(_){}
+    try{LS.set('survivorDaily',JSON.stringify({signin:siod.signin,tile:siod.tile,streak:siod.streak}));}catch(_){}
     saveMeta();
   }
   // --- patrol: offline gold accrued since last CLAIM (boot-only check, no timers) ---
@@ -5495,7 +5497,7 @@ renderHeroes();
   if(pdClaim)pdClaim.onclick=()=>{
     gold+=pdPending;
     siop.last=Date.now();
-    try{localStorage.setItem('siop',JSON.stringify(siop));}catch(_){}
+    try{LS.set('siop',JSON.stringify(siop));}catch(_){}
     pdPending=0;
     hideEl('pdOv');
     if(pdBtn)pdBtn.classList.add('hidden');
@@ -5508,13 +5510,13 @@ renderHeroes();
 (function(){
   var MK='svwMedals';
   var M={k:0,b:0,el:0,runs:0,sv:0,got:{}};
-  try{var d=JSON.parse(localStorage.getItem(MK)||'null');
+  try{var d=JSON.parse(LS.get(MK)||'null');
     if(d&&typeof d==='object'){
       M.k=Math.max(0,Math.floor(+d.k)||0);M.b=Math.max(0,Math.floor(+d.b)||0);
       M.el=Math.max(0,Math.floor(+d.el)||0);M.runs=Math.max(0,Math.floor(+d.runs)||0);
       M.sv=Math.max(0,Math.floor(+d.sv)||0);M.got=(d.got&&typeof d.got==='object')?d.got:{};
     }}catch(e){}
-  function saveM(){try{localStorage.setItem(MK,JSON.stringify(M));}catch(e){}}
+  function saveM(){try{LS.set(MK,JSON.stringify(M));}catch(e){}}
   var MED_T=[
     ['k50','SLASHER 50 KILLS','kills',50],['k200','SLASHER 200 KILLS','kills',200],
     ['k600','HUNTER 600 KILLS','kills',600],['k1500','IMPALER 1500 KILLS','kills',1500],
@@ -5588,12 +5590,12 @@ renderHeroes();
 (function(){
   var RK='svwRuns';
   var R={list:[],best:0};
-  try{var d=JSON.parse(localStorage.getItem(RK)||'null');
+  try{var d=JSON.parse(LS.get(RK)||'null');
     if(d&&typeof d==='object'){
       R.best=Math.max(0,Math.floor(+d.best)||0);
       if(Array.isArray(d.list))R.list=(d.list||[]).slice(0,6);
     }}catch(e){}
-  function saveR(){try{localStorage.setItem(RK,JSON.stringify(R));}catch(e){}}
+  function saveR(){try{LS.set(RK,JSON.stringify(R));}catch(e){}}
   function jrRecord(win){
     try{
       var k=(typeof player!=='undefined'&&player&&typeof player.kills==='number')?player.kills:0;

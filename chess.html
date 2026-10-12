@@ -395,6 +395,8 @@ body.th-gold {
 <a class="back" href="index.html">← Back to Arcade Hub</a>
 
 <script>
+/* localStorage can throw (private mode, blocked cookies); without this the whole script died at load. */
+const LS={get:k=>{try{return localStorage.getItem(k);}catch(e){return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
 
 // ==================== POLYFILL ====================
 
@@ -421,7 +423,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 
 let audioCtx = null;
 function ensureAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
-let muted = localStorage.getItem('gamesMuted') === '1';
+let muted = LS.get('gamesMuted') === '1';
 let _sfxMasterGain = null;
 
 function _sfxResume() {
@@ -886,18 +888,18 @@ let game = {
 
 let metaW=0,metaL=0,metaD=0,metaStreak=0,metaBestStreak=0;
 function loadMeta(){try{
-  metaW=+localStorage.getItem('chessMetaW')||0;
-  metaL=+localStorage.getItem('chessMetaL')||0;
-  metaD=+localStorage.getItem('chessMetaD')||0;
-  metaStreak=+localStorage.getItem('chessMetaStreak')||0;
-  metaBestStreak=+localStorage.getItem('chessMetaBestStreak')||0;
+  metaW=+LS.get('chessMetaW')||0;
+  metaL=+LS.get('chessMetaL')||0;
+  metaD=+LS.get('chessMetaD')||0;
+  metaStreak=+LS.get('chessMetaStreak')||0;
+  metaBestStreak=+LS.get('chessMetaBestStreak')||0;
 }catch(e){}}
 function saveMeta(){try{
-  localStorage.setItem('chessMetaW',String(metaW));
-  localStorage.setItem('chessMetaL',String(metaL));
-  localStorage.setItem('chessMetaD',String(metaD));
-  localStorage.setItem('chessMetaStreak',String(metaStreak));
-  localStorage.setItem('chessMetaBestStreak',String(metaBestStreak));
+  LS.set('chessMetaW',String(metaW));
+  LS.set('chessMetaL',String(metaL));
+  LS.set('chessMetaD',String(metaD));
+  LS.set('chessMetaStreak',String(metaStreak));
+  LS.set('chessMetaBestStreak',String(metaBestStreak));
 }catch(e){}}
 function refreshMeta(){
   document.getElementById('metaW').textContent=metaW;
@@ -930,7 +932,7 @@ const STATS_KEY = 'chessj__stats';
 let STATS = { played: 0, w: 0, l: 0, d: 0, streak: 0, bestStreak: 0, puzzlesSolved: 0, fastestMateMoves: 0 };
 function loadStats() {
   try {
-    const raw = localStorage.getItem(STATS_KEY);
+    const raw = LS.get(STATS_KEY);
     if (raw) {
       const s = JSON.parse(raw);
       if (s && typeof s === 'object') {
@@ -941,7 +943,7 @@ function loadStats() {
     }
   } catch (e) {}
 }
-function saveStats() { try { localStorage.setItem(STATS_KEY, JSON.stringify(STATS)); } catch (e) {} }
+function saveStats() { try { LS.set(STATS_KEY, JSON.stringify(STATS)); } catch (e) {} }
 
 function trackStatsEnd(resultText) {
   if (game.counted || puzzleMode || !botEnabled) return;
@@ -985,7 +987,7 @@ const BADGE_KEY = 'chessBadges';
 let ACH_FLAGS = { combo3: false, castleWin: false };
 let castleUsedThisGame = false;
 let badges = [];
-try { badges = JSON.parse(localStorage.getItem(BADGE_KEY) || '[]') || []; } catch (e) { badges = []; }
+try { badges = JSON.parse(LS.get(BADGE_KEY) || '[]') || []; } catch (e) { badges = []; }
 const BADGES = [
   { id: 'first-win', icon: '🥇', name: 'First Blood', cond: () => STATS.w >= 1 || metaW >= 1 },
   { id: 'streak3', icon: '🔥', name: 'Three-peat', cond: () => STATS.bestStreak >= 3 || metaBestStreak >= 3 },
@@ -996,7 +998,7 @@ const BADGES = [
   { id: 'puzzler', icon: '🧩', name: 'Puzzle Solver x5', cond: () => STATS.puzzlesSolved >= 5 },
 ];
 let RUSH = { cur: 0, best: 0 };
-try { RUSH.best = +localStorage.getItem('chessRushBest') || 0; } catch (e) {}
+try { RUSH.best = +LS.get('chessRushBest') || 0; } catch (e) {}
 
 function unlockBadges() {
   let changed = false;
@@ -1008,7 +1010,7 @@ function unlockBadges() {
       try { sfx('levelup'); } catch (e) {}
     }
   }
-  if (changed) { try { localStorage.setItem(BADGE_KEY, JSON.stringify(badges)); } catch (e) {} }
+  if (changed) { try { LS.set(BADGE_KEY, JSON.stringify(badges)); } catch (e) {} }
 }
 
 function hasInsufficientMaterial(board) {
@@ -1748,7 +1750,7 @@ function checkPuzzleSolution(move) {
   if (puzzleAnswerMatches(played, pz.solution)) {
     document.getElementById('tip').textContent = '✅ Correct! Great move!';
     RUSH.cur++;
-    if (RUSH.cur > RUSH.best) { RUSH.best = RUSH.cur; try { localStorage.setItem('chessRushBest', String(RUSH.best)); } catch (e) {} }
+    if (RUSH.cur > RUSH.best) { RUSH.best = RUSH.cur; try { LS.set('chessRushBest', String(RUSH.best)); } catch (e) {} }
     STATS.puzzlesSolved++; saveStats(); unlockBadges();
     if (RUSH.cur === 3 || RUSH.cur === 5 || RUSH.cur === 10) {
       document.getElementById('tip').textContent = '🔥 Puzzle rush: ' + RUSH.cur + ' in a row! Best: ' + RUSH.best;
@@ -2026,7 +2028,7 @@ document.getElementById('btnClock').addEventListener('click', () => {
 document.getElementById('btnReset').addEventListener('click', resetGame);
 var _mbtn = document.getElementById('btnMute'); if (_mbtn) _mbtn.addEventListener('click', () => {
   muted = !muted;
-  localStorage.setItem('gamesMuted', muted ? '1' : '0'); // persist
+  LS.set('gamesMuted', muted ? '1' : '0'); // persist
   var _mi = document.getElementById('muteIcon'); if (_mi) _mi.textContent = muted ? '🔇' : '🔊';
   var _bm = document.getElementById('btnMute'); if (_bm) _bm.title = muted ? 'Sound OFF - tap to unmute' : 'Sound ON - tap to mute';
 });
