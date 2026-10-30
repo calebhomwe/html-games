@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#061320">
+<title>Harbor Light — Pocket Arcade</title>
+<style>
+:root{color-scheme:dark;--ink:#e9f8f6;--muted:#9cbabf;--deep:#061320;--panel:#102938;--glow:#a7efd7;--line:#335664;--danger:#ffb9a0}
+*{box-sizing:border-box}html{background:var(--deep)}body{margin:0;min-height:100dvh;color:var(--ink);font-family:ui-rounded,system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(ellipse at 50% -20%,#1f5766,#061320 60%);padding:calc(12px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))}
+main{width:min(100%,600px);margin:auto}.top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.brand{display:flex;align-items:center;gap:9px}.mark{display:grid;place-items:center;background:#b2f0d7;color:#07343b;width:37px;height:37px;border-radius:12px;font-weight:900}.brand strong{display:block;font-size:16px;letter-spacing:.03em}.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:.18em;text-transform:uppercase}.mini{display:flex;gap:6px}button{font:inherit;cursor:pointer;touch-action:manipulation}button:focus-visible{outline:3px solid #fff;outline-offset:3px}.mini button{min-width:42px;min-height:42px;border-radius:13px;border:1px solid var(--line);background:#102938;color:var(--ink);font-weight:750}.hud{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:7px}.stat{border:1px solid #2c4b59;border-radius:12px;background:#0b2230;padding:7px 9px;min-width:0}.stat small{display:block;font-size:9px;letter-spacing:.13em;color:var(--muted);font-weight:800;text-transform:uppercase}.stat b{font-size:clamp(14px,3.8vw,19px);white-space:nowrap}.stat.lives b{color:#ffb9a0}
+.board{position:relative;overflow:hidden;border-radius:20px;border:1px solid #335664;background:#123647;box-shadow:0 20px 50px #0006}.board canvas{display:block;width:100%;height:auto;touch-action:manipulation}.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:18px;background:linear-gradient(#071821c7,#05131bef)}.overlay[hidden]{display:none}.panel{width:min(90%,400px);text-align:center;padding:20px;border-radius:20px;border:1px solid #89c4be66;background:#0a2430eF;box-shadow:0 14px 45px #0008}.panel .eyebrow{color:#a9eed7;font-size:11px;font-weight:900;letter-spacing:.19em;text-transform:uppercase}.panel h1{margin:5px 0 9px;font-family:Georgia,serif;font-size:clamp(30px,8vw,42px);line-height:1}.panel p{color:#c6dcdb;font-size:14px;line-height:1.5;margin:0 0 16px}.primary{border:0;border-radius:14px;padding:13px 25px;min-height:48px;background:#a7efd7;color:#0a302f;font-size:15px;font-weight:900}.how{font-size:12px!important;color:#a8c4c5!important;margin:12px 0 0!important}.lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:9px}.lanes button{min-height:52px;border-radius:14px;border:1px solid #385c67;background:#122b37;color:#b9d3d2;font-weight:800;letter-spacing:.02em}.lanes button[aria-pressed="true"]{background:#a7efd7;color:#073b3c;border-color:#a7efd7;box-shadow:0 0 18px #71ddbf55}.caption{display:flex;justify-content:space-between;gap:12px;color:#98b4b6;font-size:11px;margin:9px 2px 0}.caption span:last-child{text-align:right}a{color:#bcebdc}
+@media(max-height:700px){body{padding-top:6px}.top{margin-bottom:5px}.stat{padding:4px 8px}.board{max-width:min(100%,400px);margin:auto}.lanes button{min-height:44px}.panel{padding:12px}.panel p{margin-bottom:9px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header class="top"><div class="brand"><span class="mark" aria-hidden="true">✦</span><div><strong>HARBOR LIGHT</strong><small>Keep the coast safe</small></div></div><div class="mini"><button id="sound" type="button" aria-label="Mute sound" aria-pressed="false">♪</button><button id="pause" type="button" aria-label="Pause game" disabled>Ⅱ</button></div></header>
+  <div class="hud" aria-label="Game status"><div class="stat"><small>Saved</small><b id="saved">0</b></div><div class="stat"><small>Wave</small><b id="wave">—</b></div><div class="stat lives"><small>Lives</small><b id="lives">♥ ♥ ♥</b></div><div class="stat"><small>Score</small><b id="score">0</b></div></div>
+  <div class="board"><canvas id="sea" width="720" height="650" aria-label="Three sea lanes. Select the lane of a boat as it approaches the glowing rescue line."></canvas><div class="overlay" id="overlay"><section class="panel" aria-live="polite"><div class="eyebrow" id="eyebrow">A tiny game of timing</div><h1 id="heading">Harbor Light</h1><p id="message">Guide boats home through the storm. Move the lighthouse beam to their lane as they cross the glowing rescue line.</p><button class="primary" id="start" type="button">Start rescue</button><p class="how" id="hint">Tap a lane below or use ← → / 1 2 3. Three missed boats ends the run.</p></section></div></div>
+  <div class="lanes" aria-label="Lighthouse beam position"><button type="button" data-lane="0" aria-pressed="false">← Left</button><button type="button" data-lane="1" aria-pressed="true">Center</button><button type="button" data-lane="2" aria-pressed="false">Right →</button></div>
+  <div class="caption"><span id="status" aria-live="polite">Move the beam. Save the boats.</span><span>Best <b id="best">0</b> · <a href="index.html">Arcade</a></span></div>
+</main>
+<script src="harbor-light.js"></script>
+<script>
+(function () {
+  'use strict';
+  const game = new HarborLight.Harbor(), canvas = document.getElementById('sea'), ctx = canvas.getContext('2d');
+  const $ = id => document.getElementById(id), overlay = $('overlay'), start = $('start'), laneButtons = [...document.querySelectorAll('[data-lane]')];
+  let last = null, time = 0, muted = false, audio = null, best = 0, particles = [];
+  try { const n = Number(localStorage.getItem('harbor-light-best')); best = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; } catch (_) {}
+  $('best').textContent = best;
+  function beep(freq, seconds) {
+    if (muted) return;
+    try {
+      const Audio = window.AudioContext || window.webkitAudioContext; if (!Audio) return;
+      audio = audio || new Audio(); if (audio.state === 'suspended') audio.resume().catch(() => {});
+      const o = audio.createOscillator(), g = audio.createGain(); o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001,audio.currentTime); g.gain.exponentialRampToValueAtTime(.045,audio.currentTime+.015);
+      g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+seconds); o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime+seconds+.02);
+    } catch (_) {}
+  }
+  function setOverlay(title, message, button, eyebrow, hint) {
+    $('heading').textContent = title; $('message').textContent = message; start.textContent = button;
+    $('eyebrow').textContent = eyebrow; $('hint').textContent = hint; overlay.hidden = false;
+  }
+  function refresh() {
+    $('saved').textContent = game.rescued; $('score').textContent = game.score;
+    $('wave').textContent = game.wave || '—'; $('lives').textContent = '♥ '.repeat(game.lives).trim() || '—';
+    $('pause').disabled = !['playing','break','paused'].includes(game.state);
+    $('pause').textContent = game.state === 'paused' ? '▶' : 'Ⅱ';
+    $('pause').setAttribute('aria-label', game.state === 'paused' ? 'Resume game' : 'Pause game');
+    laneButtons.forEach((b,i) => { b.setAttribute('aria-pressed', String(game.lane === i)); b.disabled = game.state !== 'playing'; });
+  }
+  function select(lane) { game.selectLane(lane); refresh(); }
+  laneButtons.forEach((b,i) => b.addEventListener('click', () => select(i)));
+  canvas.addEventListener('pointerdown', e => { const rect=canvas.getBoundingClientRect(); select(Math.min(2,Math.max(0,Math.floor((e.clientX-rect.left)/rect.width*3)))); });
+  start.addEventListener('click', () => {
+    if (game.state === 'paused') game.resume(); else { game.start(); particles = []; }
+    overlay.hidden = true; last = null; beep(520,.12); refresh();
+  });
+  function togglePause() {
+    if (game.state === 'paused') { game.resume(); overlay.hidden = true; last = null; }
+    else if (game.state === 'playing' || game.state === 'break') { game.pause(); last = null; setOverlay('Paused', 'The boats are waiting safely.', 'Resume rescue', 'Take your time', 'Use the pause button or Escape to continue.'); }
+    refresh();
+  }
+  $('pause').addEventListener('click',togglePause);
+  $('sound').addEventListener('click', () => { muted = !muted; $('sound').setAttribute('aria-pressed',String(muted)); $('sound').setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound'); $('sound').textContent = muted ? '×' : '♪'; if(!muted) beep(520,.1); });
+  document.addEventListener('visibilitychange', () => { if(document.hidden && (game.state==='playing'||game.state==='break')) togglePause(); last = null; });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { togglePause(); return; }
+    if (game.state !== 'playing') return;
+    let lane = null;
+    if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') lane = Math.max(0,game.lane-1);
+    else if(e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') lane = Math.min(2,game.lane+1);
+    else if(['1','2','3'].includes(e.key)) lane = Number(e.key)-1;
+    if(lane !== null) { e.preventDefault(); select(lane); }
+  });
+  function drawBoat(boat) {
+    const x = (boat.lane+.5)*240, y = boat.y*650, near = boat.y >= HarborLight.DANGER;
+    ctx.save(); ctx.translate(x,y); ctx.rotate(Math.sin(time*2+boat.id)*.04);
+    ctx.fillStyle = near ? '#fdf6d0' : '#b8d8d5'; ctx.beginPath();ctx.moveTo(-18,0);ctx.lineTo(18,0);ctx.lineTo(12,10);ctx.lineTo(-11,10);ctx.closePath();ctx.fill();
+    ctx.fillStyle = '#fff4cf';ctx.beginPath();ctx.moveTo(-1,-24);ctx.lineTo(-1,-3);ctx.lineTo(-15,-3);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='#598b8d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(1,-26);ctx.lineTo(1,0);ctx.stroke();ctx.restore();
+  }
+  function draw() {
+    const w=720,h=650; const sky=ctx.createLinearGradient(0,0,0,h);sky.addColorStop(0,'#194a60');sky.addColorStop(.55,'#123a4a');sky.addColorStop(1,'#09232f');ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
+    for(let i=0;i<28;i++){const x=(i*193+51)%w,y=(i*71+13)%330;ctx.fillStyle=i%4===0?'#d8fff1aa':'#b3e5d54a';ctx.fillRect(x,y,2,2);}
+    const laneX=game.lane*240;ctx.fillStyle='#b4f6d316';ctx.beginPath();ctx.moveTo(360,650);ctx.lineTo(laneX+28,400);ctx.lineTo(laneX+212,400);ctx.closePath();ctx.fill();
+    ctx.setLineDash([6,12]);ctx.strokeStyle='#8dc8c522';ctx.lineWidth=2;[240,480].forEach(x=>{ctx.beginPath();ctx.moveTo(x,22);ctx.lineTo(x,615);ctx.stroke();});ctx.setLineDash([]);
+    ctx.fillStyle='#73dcbd14';ctx.fillRect(0,HarborLight.DANGER*h,w,(HarborLight.SHORE-HarborLight.DANGER)*h);
+    ctx.strokeStyle='#91f8d3';ctx.lineWidth=3;ctx.shadowColor='#86fbd3';ctx.shadowBlur=12;ctx.beginPath();ctx.moveTo(0,HarborLight.DANGER*h);ctx.lineTo(w,HarborLight.DANGER*h);ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle='#b3efde';ctx.font='bold 14px system-ui';ctx.fillText('RESCUE LINE',16,HarborLight.DANGER*h-12);
+    ctx.fillStyle='#071c26';ctx.beginPath();ctx.moveTo(0,613);for(let x=0;x<=w;x+=30)ctx.lineTo(x,609+Math.sin(x*.05)*5);ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fill();
+    game.boats.forEach(drawBoat);
+    particles=particles.filter(p=>time-p.t<.65);particles.forEach(p=>{ctx.globalAlpha=Math.max(0,1-(time-p.t)/.65);ctx.fillStyle=p.type==='rescue'?'#ccffe6':'#ffb8a0';ctx.font='bold 21px system-ui';ctx.fillText(p.type==='rescue'?`+${p.points}`:'MISSED',(p.lane+.5)*240-25,HarborLight.DANGER*h-25-(time-p.t)*30);ctx.globalAlpha=1;});
+    ctx.fillStyle='#d8eadd';ctx.beginPath();ctx.moveTo(335,650);ctx.lineTo(342,603);ctx.lineTo(378,603);ctx.lineTo(385,650);ctx.closePath();ctx.fill();ctx.fillStyle='#1d4850';ctx.fillRect(340,602,40,8);ctx.fillStyle='#f9e7aa';ctx.fillRect(348,590,24,12);ctx.fillStyle='#1c4750';ctx.fillRect(344,586,32,6);
+  }
+  function handleEvents() {
+    for (const e of game.takeEvents()) {
+      if(e.type==='rescue'){ particles.push({...e,t:time}); $('status').textContent = game.streak >= 2 ? `${game.streak} safe in a row!` : 'Boat safely home'; beep(660,.1); }
+      if(e.type==='warning'){ $('status').textContent = `Boat at rescue line: ${['left','center','right'][e.lane]}!`; beep(390,.12); }
+      if(e.type==='miss'){ particles.push({...e,t:time}); $('status').textContent='A boat was missed'; beep(170,.18); }
+      if(e.type==='wave') $('status').textContent = `Wave ${e.wave} — incoming boats`;
+      if(e.type==='clear') $('status').textContent = `Wave ${e.wave} clear!`;
+      if(e.type==='gameover') {
+        if(game.score>best){ best=game.score; try{localStorage.setItem('harbor-light-best',String(best));}catch(_){} $('best').textContent=best; }
+        setOverlay('Night watch over', `You saved ${game.rescued} boats and scored ${game.score}. Best: ${best}.`, 'Sail again', `Reached wave ${game.wave}`, 'Each new watch begins with three lives.');
+      }
+    }
+  }
+  function frame(now) {
+    if(last === null) last=now;
+    const dt=Math.min((now-last)/1000,.1);last=now;
+    if(game.state==='playing'||game.state==='break'){time+=dt;game.update(dt);handleEvents();}
+    refresh();draw();requestAnimationFrame(frame);
+  }
+  refresh();draw();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
