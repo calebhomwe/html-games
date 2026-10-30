@@ -42,8 +42,21 @@ test('DOM controls boot, move, reject distant clicks and restart a shift',()=>{
  const document={getElementById:id=>ids[id],createElement:()=>new Element(),querySelectorAll:()=>buttons,addEventListener:(n,fn)=>{events[n]=fn}};
  const storage={getItem:()=>null,setItem:()=>{}};const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
  vm.runInNewContext(script,{document,localStorage:storage});assert.equal(ids.board.children.length,36);assert.equal(ids.fuel.textContent,32);assert.equal(ids.moves.textContent,50);
+ const labels=()=>ids.board.children.map(c=>c['aria-label']);
+ for(let n=1;n<=3;n++){
+  assert.equal(labels().filter(x=>x.includes(', parcel '+n)).length,1,'one pickup for each parcel');
+  assert.equal(labels().filter(x=>x.includes(', drop-off preview for parcel '+n)).length,1,'each pickup has a numbered preview');
+ }
  ids.board.children[0].listeners.click();assert.equal(ids.moves.textContent,50,'distant square cannot move');
  buttons[0].listeners.click();assert.equal(ids.moves.textContent,49);assert.equal(ids.fuel.textContent,31);
  let prevented=false;events.keydown({key:'ArrowRight',preventDefault(){prevented=true}});assert.ok(prevented);assert.equal(ids.moves.textContent,48);
  ids.new.listeners.click();assert.equal(ids.moves.textContent,50);assert.equal(ids.fuel.textContent,32);assert.equal(ids.result.hidden,true);
+ // Route to the closest pickup, then check the chosen destination replaces previews.
+ const pickup=labels().map((s,i)=>({s,x:i%6,y:Math.floor(i/6)})).filter(o=>/, parcel \d/.test(o.s)).sort((a,b)=>(Math.abs(a.x-2)+Math.abs(a.y-2))-(Math.abs(b.x-2)+Math.abs(b.y-2)))[0];
+ let x=2,y=2;
+ while(x!==pickup.x){const d=x<pickup.x?1:-1;x+=d;buttons[d===1?3:2].listeners.click();}
+ while(y!==pickup.y){const d=y<pickup.y?1:-1;y+=d;buttons[d===1?1:0].listeners.click();}
+ assert.equal(ids.phase.textContent,'Deliver the parcel');
+ assert.equal(labels().filter(s=>s.includes('drop-off preview')).length,0,'previews hide while carrying');
+ assert.equal(labels().filter(s=>s.includes('active drop-off')).length,1,'chosen drop-off remains visible');
 });
