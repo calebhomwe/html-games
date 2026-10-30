@@ -592,7 +592,9 @@ function updateHud(){
   elPB.classList.toggle('ready',g>=1);
   updateRows();
 }
-function logicStep(){
+function logicStep(force){
+  // Freeze the simulation while hidden; resume once using elapsed wall time.
+  if(document.hidden&&!force){return;}
   var nowT=Date.now(),dt=(nowT-lastTick)/1000;
   lastTick=nowT;
   if(!(dt>0)||!inGame){return;}
@@ -738,9 +740,15 @@ function init(){
   }
   $('muteBtn').addEventListener('click',function(){muted=!muted;localStorage.setItem('ie_muted',muted?'1':'0');$('muteBtn').textContent=muted?'🔇':'🔊';});
   $('muteBtn').textContent=muted?'🔇':'🔊';
-  setInterval(save,5000);
-  window.addEventListener('beforeunload',save);
-  document.addEventListener('visibilitychange',function(){if(document.hidden){save();}});
+  // Do not overwrite the hidden-time checkpoint with an unaccrued timestamp.
+  setInterval(function(){if(!document.hidden){save();}},5000);
+  window.addEventListener('beforeunload',function(){
+    if(!document.hidden){logicStep();save();}
+  });
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden){logicStep(true);save();}
+    else if(inGame){logicStep();save();updateHud();}
+  });
   window.addEventListener('resize',function(){resizeFx();cacheRects();});
   window.addEventListener('scroll',cacheRects,true);
   resizeFx();
