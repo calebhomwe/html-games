@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#152930">
+<title>Parcel Route</title>
+<style>
+:root{color-scheme:light;--ink:#162f36;--cream:#fff8e9;--paper:#f7ecd7;--line:#cfbea5;--teal:#196f6b;--orange:#f07c4b;--danger:#c84f42}
+*{box-sizing:border-box}body{margin:0;background:#d7e4d9;color:var(--ink);font:500 16px/1.35 ui-rounded,"Trebuchet MS",system-ui,sans-serif;padding:calc(14px + env(safe-area-inset-top)) 14px calc(22px + env(safe-area-inset-bottom))}button{font:inherit;cursor:pointer;touch-action:manipulation}button:focus-visible{outline:3px solid #111;outline-offset:3px}
+.shell{max-width:950px;margin:auto}.top{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:12px}.eyebrow{font-size:.7rem;letter-spacing:.18em;font-weight:900;color:#4e716c}.top h1{font-size:clamp(2rem,7vw,3.7rem);letter-spacing:-.06em;line-height:.9;margin:4px 0 0}.top p{margin:0;font-size:.86rem;color:#49645c;text-align:right}.layout{display:grid;grid-template-columns:minmax(0,1fr) 255px;gap:13px;align-items:start}.boardwrap,.side{background:var(--cream);border:2px solid #213e43;border-radius:22px;box-shadow:0 6px 0 #9db7a4;padding:14px}.stats{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:11px}.stats div{background:#e9e0cc;padding:7px 11px;border-radius:12px;font-size:.72rem;font-weight:900;letter-spacing:.07em;flex:1}.stats strong{display:block;font-size:1.22rem;letter-spacing:0}.board{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;aspect-ratio:1;background:#3b6061;padding:6px;border-radius:15px}.tile{min-width:0;padding:0;border:0;border-radius:9px;background:#d2e1cf;position:relative;display:grid;place-items:center;color:#163b3a;font-weight:900;font-size:clamp(1rem,4vw,2rem);line-height:1;box-shadow:inset 0 -3px #adc4b2}.tile.street{background:#d5d2bf;box-shadow:inset 0 -3px #b6b19c}.tile.hot{background:#f4c0a6;box-shadow:inset 0 -3px #dc9277}.tile.hot:before{content:'!';position:absolute;right:5px;top:4px;font-size:.65rem;color:#a84232}.tile.adjacent{outline:2px solid #fff9;outline-offset:-3px}.tile .mark{position:absolute;top:4px;left:5px;font-size:.65rem;color:#19494a}.tile .emoji{filter:drop-shadow(0 2px 1px #0002)}.tile.destination{box-shadow:inset 0 0 0 3px #eea349}.tile.player{background:#a4d6bf}.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:.71rem;color:#536f68;margin:9px 1px 0}.dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;background:#f4c0a6}.dot.goal{background:#eea349}.side h2{margin:0 0 4px;font-size:1.1rem}.side p{margin:0;color:#516b65;font-size:.85rem}.objective{margin:12px 0;background:#e8f2e8;border-radius:14px;padding:12px;min-height:78px}.objective strong{display:block;margin-bottom:3px}.orders{display:grid;gap:7px;margin:12px 0}.order{background:#f2ead9;border:1px solid #dfd1b7;border-radius:11px;padding:8px 10px;font-size:.78rem}.order b{color:#b65136}.controls{display:grid;grid-template-columns:repeat(3,52px);gap:5px;justify-content:center;margin:15px auto 10px}.controls button{min-height:43px;border:0;border-radius:11px;color:white;background:#275d5d;font-size:1.15rem;font-weight:900}.controls button:active{background:#123f41}.controls .blank{visibility:hidden}.actions{display:flex;gap:8px}.action{flex:1;border:0;border-radius:11px;padding:10px;background:#245e5c;color:white;font-weight:900}.action.secondary{background:#e8dfcd;color:#294543}.note{font-size:.75rem!important}.result{position:fixed;inset:0;background:#09272bba;display:grid;place-items:center;padding:18px;z-index:3}.result[hidden]{display:none}.result-card{width:min(360px,100%);padding:24px;background:var(--cream);border-radius:22px;border:3px solid #264a4c;text-align:center;box-shadow:0 8px 0 #122f2f}.result-card h2{font-size:2rem;margin:0 0 8px}.result-card p{color:#4d6761}.result-card button{padding:13px 23px;border:0;background:var(--teal);color:white;border-radius:12px;font-weight:900}.toast{min-height:1.5em;color:#9c4d33;font-size:.78rem;font-weight:800;margin-top:8px}
+@media(max-width:690px){body{padding-left:10px;padding-right:10px}.top p{display:none}.layout{grid-template-columns:1fr}.boardwrap,.side{padding:11px}.side{display:grid;grid-template-columns:1fr auto;column-gap:10px}.side h2,.side>p,.objective,.orders,.toast,.actions{grid-column:1/-1}.objective{min-height:0;margin:8px 0}.orders{grid-template-columns:repeat(3,minmax(0,1fr));margin:6px 0}.controls{margin:8px auto;grid-column:1/-1}.tile{border-radius:6px}.stats div{padding:6px}.stats strong{font-size:1rem}}
+@media(max-height:760px) and (max-width:690px){.top{margin-bottom:8px}.top h1{font-size:2rem}.legend{margin-top:4px}.controls{margin:5px auto}.controls button{min-height:38px}.side>p.note{display:none}.board{max-width:min(100%,55vh);margin:auto}.orders{margin:4px 0}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header class="top"><div><div class="eyebrow">A pocket-sized strategy game</div><h1>Parcel Route</h1></div><p>Small streets.<br>Big delivery decisions.</p></header>
+<div class="layout"><section class="boardwrap" aria-label="Delivery map"><div class="stats"><div>SCORE<strong id="score">0</strong></div><div>FUEL<strong id="fuel">32</strong></div><div>MOVES LEFT<strong id="moves">50</strong></div><div>BEST<strong id="best">0</strong></div></div><div class="board" id="board" aria-label="Six by six delivery map"></div><div class="legend"><span><i class="dot"></i>Traffic: costs 2 extra fuel</span><span><i class="dot goal"></i>Drop-off</span><span>Tap a neighbouring tile</span></div></section>
+<aside class="side"><h2 id="phase">Choose a pickup</h2><p class="note">Pick a parcel, then take it to its matching drop-off. Longer deliveries pay more.</p><div class="objective" id="objective" aria-live="polite"></div><div class="orders" id="orders"></div><div class="controls" aria-label="Move controls"><span class="blank"></span><button data-move="up" aria-label="Move up">▲</button><span class="blank"></span><button data-move="left" aria-label="Move left">◀</button><button data-move="down" aria-label="Move down">▼</button><button data-move="right" aria-label="Move right">▶</button></div><div class="actions"><button class="action secondary" id="new">New shift</button></div><div class="toast" id="toast" aria-live="polite"></div></aside></div>
+</main>
+<div class="result" id="result" hidden><div class="result-card"><div class="eyebrow">Shift complete</div><h2 id="resultTitle">Nice work!</h2><p id="resultText"></p><button id="again">Play again</button></div></div>
+<script>
+/* ENGINE_START: deterministic turn rules; randomness is injected for repeatable tests. */
+const ParcelEngine = (()=>{
+ const SIZE=6, MAX_TURNS=50, START_FUEL=32, CAP=45;
+ const dist=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
+ const same=(a,b)=>a.x===b.x&&a.y===b.y;
+ const traffic=(x,y,turn)=>(y===1||y===4)&&((x+turn+y)%4===0);
+ function newJob(state,random){
+  const used=[state.player,...state.jobs.flatMap(j=>[j.pickup,j.drop])];
+  if(state.carry)used.push(state.carry.drop);
+  const pickups=[];for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++)if(!used.some(p=>same(p,{x,y})))pickups.push({x,y});
+  const pickup=pickups[Math.floor(random()*pickups.length)];
+  const drops=[];for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){const p={x,y};if(dist(p,pickup)>=3&&!used.some(other=>same(other,p)))drops.push(p)}
+  const drop=drops[Math.floor(random()*drops.length)];
+  return {pickup,drop,value:100+dist(pickup,drop)*30};
+ }
+ function create(random=Math.random){const s={player:{x:2,y:2},jobs:[],carry:null,score:0,fuel:START_FUEL,turn:0,delivered:0,done:false,message:'Pick a parcel to start your shift.'};while(s.jobs.length<3)s.jobs.push(newJob(s,random));return s}
+ function move(s,dx,dy,random=Math.random){
+  if(s.done||Math.abs(dx)+Math.abs(dy)!==1)return false;
+  const next={x:s.player.x+dx,y:s.player.y+dy};if(next.x<0||next.x>=SIZE||next.y<0||next.y>=SIZE)return false;
+  const heavy=traffic(next.x,next.y,s.turn);s.player=next;s.fuel=Math.max(0,s.fuel-(heavy?3:1));s.turn++;
+  s.message=heavy?'Traffic! That move used 3 fuel.':'';
+  if(s.carry&&same(next,s.carry.drop)){
+   const value=s.carry.value;s.score+=value;s.delivered++;s.carry=null;s.fuel=Math.min(CAP,s.fuel+7);s.message='Delivered! +'+value+' points and 7 fuel.';s.jobs.push(newJob(s,random));
+  }else if(!s.carry){const i=s.jobs.findIndex(j=>same(j.pickup,next));if(i>=0){s.carry=s.jobs.splice(i,1)[0];s.message='Parcel picked up. Follow the gold drop-off.'}}
+  if(s.turn>=MAX_TURNS||s.fuel<=0){s.done=true;s.message=s.fuel<=0?'Out of fuel.':'Shift complete.'}
+  return true;
+ }
+ return {SIZE,MAX_TURNS,dist,traffic,create,move};
+})();
+/* ENGINE_END */
+(()=>{
+ const $=id=>document.getElementById(id);let state,best=0;try{const n=Number(localStorage.getItem('parcelRouteBest'));best=Number.isFinite(n)&&n>0?Math.floor(n):0}catch(e){}
+ const cells=[];for(let y=0;y<6;y++)for(let x=0;x<6;x++){const b=document.createElement('button');b.className='tile';b.type='button';b.addEventListener('click',()=>{const dx=x-state.player.x,dy=y-state.player.y;if(Math.abs(dx)+Math.abs(dy)===1)step(dx,dy)});$('board').appendChild(b);cells.push(b)}
+ function finish(){if(state.score>best){best=state.score;try{localStorage.setItem('parcelRouteBest',String(best))}catch(e){}}$('resultTitle').textContent=state.delivered?'Shift complete!':'First shift complete';$('resultText').textContent=state.delivered+' deliveries · '+state.score+' points. Best: '+best+'.';$('result').hidden=false;$('again').focus()}
+ function render(){
+  $('score').textContent=state.score;$('fuel').textContent=state.fuel;$('moves').textContent=50-state.turn;$('best').textContent=best;
+  $('phase').textContent=state.carry?'Deliver the parcel':'Choose a pickup';$('objective').innerHTML=state.carry?'<strong>Drop-off · '+state.carry.value+' points</strong>Follow the gold square. A delivery restores 7 fuel.':'<strong>Three parcels are waiting</strong>Each has a different distance and reward. Pick the route that suits your fuel.';
+  $('orders').innerHTML=state.jobs.map((j,i)=>'<div class="order"><strong>Parcel '+(i+1)+'</strong><br><b>'+j.value+' pts</b> · '+ParcelEngine.dist(j.pickup,j.drop)+' blocks</div>').join('');
+  $('toast').textContent=state.message;
+  cells.forEach((b,i)=>{const x=i%6,y=Math.floor(i/6),atPlayer=x===state.player.x&&y===state.player.y,idx=state.jobs.findIndex(j=>j.pickup.x===x&&j.pickup.y===y),isDrop=state.carry&&state.carry.drop.x===x&&state.carry.drop.y===y,hot=ParcelEngine.traffic(x,y,state.turn),adj=ParcelEngine.dist({x,y},state.player)===1;b.className='tile'+((y===1||y===4)?' street':'')+(hot?' hot':'')+(isDrop?' destination':'')+(atPlayer?' player':'')+(adj?' adjacent':'');b.innerHTML=atPlayer?'<span class="emoji">🚙</span>':isDrop?'<span class="emoji">📍</span>':idx>=0?'<span class="mark">'+(idx+1)+'</span><span class="emoji">📦</span>':'';b.setAttribute('aria-label',`Row ${y+1}, column ${x+1}${atPlayer?', your car':''}${isDrop?', drop-off':''}${idx>=0?', parcel '+(idx+1):''}${hot?', traffic':''}${adj?', available move':''}`)})
+ }
+ function step(dx,dy){if(ParcelEngine.move(state,dx,dy)){render();if(state.done)finish()}}
+ function start(){state=ParcelEngine.create();$('result').hidden=true;render()}
+ document.querySelectorAll('[data-move]').forEach(b=>b.addEventListener('click',()=>{const m={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[b.dataset.move];step(...m)}));
+ document.addEventListener('keydown',e=>{const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]}[e.key];if(m&&!state.done){e.preventDefault();step(...m)}});
+ $('new').addEventListener('click',start);$('again').addEventListener('click',start);start();
+})();
+</script>
+</body>
+</html>
