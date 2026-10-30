@@ -279,6 +279,9 @@ function maxAfford(i){
 function prestigeGain(){return Math.floor(Math.sqrt(S.lifetime/1e6));}
 function save(){
   S.last=Date.now();
+  // Keep the staked coins and deadline together so closing the game does not
+  // silently discard a caravan already paid for by the player.
+  S.carEnd=carEnd;S.carStake=carStake;
   try{localStorage.setItem('ie_state',JSON.stringify(S));}catch(e){}
 }
 function load(){
@@ -295,6 +298,8 @@ function load(){
       S.chests=Math.floor(num(d.chests,0));
       S.trib=Math.floor(num(d.trib,0));S.tribs=Math.floor(num(d.tribs,0));
       S.taps=Math.floor(num(d.taps,0));S.tapRew=Math.floor(num(d.tapRew,0));
+      var savedEnd=num(d.carEnd,0),savedStake=num(d.carStake,0);
+      if(savedEnd>0&&savedStake>0){carEnd=savedEnd;carStake=savedStake;}
     }
   }catch(e){}
   mult=Math.pow(1.1,S.gold);
@@ -560,9 +565,9 @@ function refreshTrib(){
   else{b.style.display='';}
 }
 function doPrestige(){
-  if(carEnd){carEnd=0;carStake=0;toast('🛒 Your caravan was lost in the reset…');}
   var g=prestigeGain();
   if(g<1){sfx('error');return;}
+  if(carEnd){carEnd=0;carStake=0;toast('🛒 Your caravan was lost in the reset…');}
   sfx('prestige');vib([20,50,20,50,40]);
   burst(FW/2,FH/2,80,260,120,1.2,4);
   confetti();
@@ -708,6 +713,7 @@ function init(){
   $('btnPlay').addEventListener('click',function(){sfx('buy');startGame();});
   $('btnReset').addEventListener('click',function(){
     if(!confirm('Start a new run? Buildings and coins reset (golden coins are kept).')){return;}
+    carEnd=0;carStake=0;
     S.coins=0;S.lifetime=0;S.last=Date.now();
     var j;
     for(j=0;j<DEFS.length;j++){S.owned[j]=0;}
