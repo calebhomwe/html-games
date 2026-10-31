@@ -40,10 +40,35 @@ function advance(s,input,dt=DT){
 }
 return {W,H,DT,LEVELS,make,advance,die,BUFFER,GRACE};})();
 /* MODEL_END */
+// Small, bounded feedback bursts; particles never affect simulation or scoring.
+// A reduced-motion preference disables them entirely.
+const SkywardFeedback=(()=>{
+ const MAX=60;
+ function create(reduced=false){return {reduced,particles:[]}}
+ function burst(f,kind,x,y){
+  if(f.reduced)return;
+  const color={land:'#cbe9d5',dash:'#9ff4e1',light:'#ffe19e',fall:'#ffac91'}[kind]||'#ffffff';
+  const count=kind==='light'?9:kind==='fall'?8:5;
+  for(let i=0;i<count;i++){
+   const a=(Math.PI*2*i/count)+(kind==='land'?Math.PI/6:0),speed=kind==='fall'?85:kind==='light'?65:45;
+   f.particles.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,life:.32,max:.32,color});
+  }
+  if(f.particles.length>MAX)f.particles.splice(0,f.particles.length-MAX);
+ }
+ function step(f,dt){for(const p of f.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=65*dt;p.life-=dt}f.particles=f.particles.filter(p=>p.life>0)}
+ return {create,burst,step};
+})();
 (()=>{
  const $=id=>document.getElementById(id),canvas=$('view'),g=canvas.getContext('2d'),STORE='skywardRunSave1';
  let saved={unlocked:0,best:null,checkpoint:null};try{let v=JSON.parse(localStorage.getItem(STORE));if(v&&Number.isInteger(v.unlocked))saved.unlocked=Math.max(0,Math.min(3,v.unlocked));if(v&&v.best&&Number.isFinite(v.best.time)&&v.best.time>=0&&Number.isInteger(v.best.deaths)&&v.best.deaths>=0)saved.best=v.best;if(v&&v.checkpoint&&Number.isInteger(v.checkpoint.level)&&v.checkpoint.level>=1&&v.checkpoint.level<=saved.unlocked&&Number.isInteger(v.checkpoint.deaths)&&v.checkpoint.deaths>=0&&Number.isFinite(v.checkpoint.elapsed)&&v.checkpoint.elapsed>=0)saved.checkpoint=v.checkpoint}catch(e){}
  let game=Skyward.make(),phase='menu',last=0,acc=0,keys=new Map(),pointers=new Map(),jumpQueued=false,dashQueued=false,announced='',audio=null,muted=false;
+ const motionPreference=typeof window.matchMedia==='function'?window.matchMedia('(prefers-reduced-motion: reduce)'):null;
+ const effects=SkywardFeedback.create(!!(motionPreference&&motionPreference.matches));
+ if(motionPreference){
+  const updateMotion=event=>{effects.reduced=event.matches;if(effects.reduced)effects.particles.length=0};
+  if(typeof motionPreference.addEventListener==='function')motionPreference.addEventListener('change',updateMotion);
+  else if(typeof motionPreference.addListener==='function')motionPreference.addListener(updateMotion);
+ }
  function prepareAudio(){if(muted)return;try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;if(!audio)audio=new AC();if(audio.state==='suspended')audio.resume().catch(()=>{})}catch(e){}}
  function sound(kind){if(muted||!audio||audio.state!=='running')return;try{const t=audio.currentTime,o=audio.createOscillator(),vol=audio.createGain(),hz={jump:360,dash:210,light:650,fall:125,gate:520}[kind]||360;o.type=kind==='fall'?'triangle':'sine';o.frequency.setValueAtTime(hz,t);o.frequency.exponentialRampToValueAtTime(kind==='fall'?70:hz*1.4,t+.11);vol.gain.setValueAtTime(.0001,t);vol.gain.exponentialRampToValueAtTime(.07,t+.012);vol.gain.exponentialRampToValueAtTime(.0001,t+.16);o.connect(vol);vol.connect(audio.destination);o.start(t);o.stop(t+.17)}catch(e){}}
  $('sound').addEventListener('click',()=>{muted=!muted;$('sound').textContent=muted?'♪ OFF':'♪ ON';$('sound').setAttribute('aria-pressed',String(muted));$('sound').setAttribute('aria-label',muted?'Unmute sound':'Mute sound');if(!muted)prepareAudio()});
@@ -51,7 +76,7 @@ return {W,H,DT,LEVELS,make,advance,die,BUFFER,GRACE};})();
  function setStatus(text){if(text&&text!==announced){$('status').textContent=text;announced=text}}
  function resetInput(){keys.clear();pointers.clear();jumpQueued=false;dashQueued=false;document.querySelectorAll('[data-action]').forEach(b=>b.removeAttribute('aria-pressed'))}
  function showMenu(heading,description,action,continueAllowed=false){$('overline').textContent='SKYWARD RUN';$('title').textContent=heading;$('detail').textContent=description;$('start').textContent=action;$('continue').hidden=!continueAllowed;$('overlay').hidden=false;}
- function start(level,checkpoint=null){prepareAudio();resetInput();if(!checkpoint){saved.checkpoint=null;persist()}game=Skyward.make(level,checkpoint?checkpoint.deaths:0,checkpoint?checkpoint.elapsed:0);phase='play';$('overlay').hidden=true;last=0;acc=0;setStatus('Stage '+(game.level+1)+': '+Skyward.LEVELS[game.level].name)}
+ function start(level,checkpoint=null){prepareAudio();resetInput();effects.particles=[];if(!checkpoint){saved.checkpoint=null;persist()}game=Skyward.make(level,checkpoint?checkpoint.deaths:0,checkpoint?checkpoint.elapsed:0);phase='play';$('overlay').hidden=true;last=0;acc=0;setStatus('Stage '+(game.level+1)+': '+Skyward.LEVELS[game.level].name)}
  function pause(){if(phase!=='play')return;phase='pause';resetInput();showMenu('Take a breath','Your run is paused.','RESUME');setStatus('Paused')}
  function finishStage(){if(game.won){phase='win';if(!saved.best||game.deaths<saved.best.deaths||(game.deaths===saved.best.deaths&&game.elapsed<saved.best.time))saved.best={deaths:game.deaths,time:game.elapsed};saved.checkpoint=null;persist();showMenu('The sky is yours','Four beacons restored in '+game.elapsed.toFixed(1)+' seconds with '+game.deaths+' falls. Best: '+saved.best.deaths+' falls, '+saved.best.time.toFixed(1)+' seconds.','RUN AGAIN');setStatus(game.reason);return}
   saved.unlocked=Math.max(saved.unlocked,game.level+1);saved.checkpoint={level:game.level+1,deaths:game.deaths,elapsed:game.elapsed};persist();phase='between';showMenu('Beacon restored',Skyward.LEVELS[game.level+1].name+' is ahead. '+game.deaths+' falls so far.','NEXT STAGE');setStatus(game.reason)}
@@ -64,7 +89,7 @@ return {W,H,DT,LEVELS,make,advance,die,BUFFER,GRACE};})();
  window.addEventListener('blur',pause);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause()});
  function resume(){prepareAudio();phase='play';$('overlay').hidden=true;last=0;acc=0;resetInput();setStatus('Resumed')}
  $('pause').addEventListener('click',()=>{if(phase==='play')pause();else if(phase==='pause')resume()});
- $('start').addEventListener('click',()=>{if(phase==='pause')resume();else if(phase==='between'){const next=Skyward.make(game.level+1,game.deaths,game.elapsed);game=next;phase='play';$('overlay').hidden=true;last=0;acc=0;resetInput();setStatus('Stage '+(game.level+1)+': '+Skyward.LEVELS[game.level].name)}else start(0)});
+ $('start').addEventListener('click',()=>{if(phase==='pause')resume();else if(phase==='between'){const next=Skyward.make(game.level+1,game.deaths,game.elapsed);game=next;effects.particles=[];phase='play';$('overlay').hidden=true;last=0;acc=0;resetInput();setStatus('Stage '+(game.level+1)+': '+Skyward.LEVELS[game.level].name)}else start(0)});
  $('continue').addEventListener('click',()=>{if(saved.checkpoint)start(saved.checkpoint.level,saved.checkpoint)});
  $('continue').hidden=!saved.checkpoint;
  function render(){const s=game,p=s.p,L=Skyward.LEVELS[s.level];
@@ -76,10 +101,11 @@ return {W,H,DT,LEVELS,make,advance,die,BUFFER,GRACE};})();
   for(const o of s.orbs)if(!o.taken){g.save();g.translate(o.x,o.y);g.fillStyle='#ffdfa2';g.shadowBlur=20;g.shadowColor='#ffdd99';g.rotate(Math.PI/4);g.fillRect(-8,-8,16,16);g.restore()}
   for(const e of s.enemies){g.fillStyle='#e96660';g.beginPath();g.arc(e.x,e.y,12,0,Math.PI*2);g.fill();g.fillStyle='#fff';g.fillRect(e.x-5,e.y-3,3,3);g.fillRect(e.x+2,e.y-3,3,3)}
   const [ex,ey]=L.exit;g.fillStyle=s.collected===3?'#ffdc98':'#768a95';g.fillRect(ex,ey-62,29,62);g.fillStyle='#263e4b';g.fillRect(ex+6,ey-55,17,55);g.fillStyle=s.collected===3?'#ffdb80':'#647a84';g.fillRect(ex+10,ey-37,9,9);
+  for(const fx of effects.particles){g.save();g.globalAlpha=Math.max(0,fx.life/fx.max);g.fillStyle=fx.color;g.fillRect(fx.x-2,fx.y-2,4,4);g.restore()}
   g.fillStyle=p.dash>0?'#a4fff0':'#fff1de';g.fillRect(p.x,p.y,p.w,p.h);g.fillStyle='#3f5f72';g.fillRect(p.x+(p.facing>0?15:5),p.y+6,4,4);g.fillStyle='#ff9d78';g.fillRect(p.x+4,p.y+18,16,5);
   $('stageName').textContent=(s.level+1)+' / 4 · '+L.name;$('shards').textContent=s.collected+' / 3';$('deaths').textContent=s.deaths;$('dashState').textContent=p.dashCd<=0?'READY':p.dashCd.toFixed(1)+'s';$('timer').textContent=s.elapsed.toFixed(1);if(s.reason)setStatus(s.reason);
  }
- function frame(t){requestAnimationFrame(frame);if(!last)last=t;const dt=Math.min(.05,Math.max(0,(t-last)/1000));last=t;if(phase==='play'){acc+=dt;while(acc>=Skyward.DT){const oldVy=game.p.vy,oldDash=game.p.dash,oldLights=game.collected,oldFalls=game.deaths;Skyward.advance(game,{left:held('left'),right:held('right'),jumpHeld:held('jump'),jumpPressed:jumpQueued,dashPressed:dashQueued});if(game.deaths>oldFalls)sound('fall');else{if(oldVy>=0&&game.p.vy<0)sound('jump');if(oldDash<=0&&game.p.dash>0)sound('dash');if(game.collected>oldLights)sound('light')}jumpQueued=false;dashQueued=false;acc-=Skyward.DT;if(game.stageClear){sound('gate');finishStage();acc=0;break}}}render()}
+ function frame(t){requestAnimationFrame(frame);if(!last)last=t;const dt=Math.min(.05,Math.max(0,(t-last)/1000));last=t;if(phase==='play'){SkywardFeedback.step(effects,dt);acc+=dt;while(acc>=Skyward.DT){const oldVy=game.p.vy,oldGround=game.p.grounded,oldDash=game.p.dash,oldLights=game.collected,oldFalls=game.deaths,oldX=game.p.x+game.p.w/2,oldY=game.p.y+game.p.h;Skyward.advance(game,{left:held('left'),right:held('right'),jumpHeld:held('jump'),jumpPressed:jumpQueued,dashPressed:dashQueued});if(game.deaths>oldFalls){sound('fall');SkywardFeedback.burst(effects,'fall',oldX,oldY)}else{if(oldVy>=0&&game.p.vy<0)sound('jump');if(oldDash<=0&&game.p.dash>0){sound('dash');SkywardFeedback.burst(effects,'dash',game.p.x+game.p.w/2,game.p.y+game.p.h/2)}if(!oldGround&&game.p.grounded&&oldVy>30)SkywardFeedback.burst(effects,'land',game.p.x+game.p.w/2,game.p.y+game.p.h);if(game.collected>oldLights){sound('light');SkywardFeedback.burst(effects,'light',game.p.x+game.p.w/2,game.p.y+game.p.h/2)}}jumpQueued=false;dashQueued=false;acc-=Skyward.DT;if(game.stageClear){sound('gate');finishStage();acc=0;break}}}render()}
  requestAnimationFrame(frame);
 })();
 </script></body></html>
