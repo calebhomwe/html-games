@@ -62,7 +62,13 @@ const SkywardFeedback=(()=>{
  const $=id=>document.getElementById(id),canvas=$('view'),g=canvas.getContext('2d'),STORE='skywardRunSave1';
  let saved={unlocked:0,best:null,checkpoint:null};try{let v=JSON.parse(localStorage.getItem(STORE));if(v&&Number.isInteger(v.unlocked))saved.unlocked=Math.max(0,Math.min(3,v.unlocked));if(v&&v.best&&Number.isFinite(v.best.time)&&v.best.time>=0&&Number.isInteger(v.best.deaths)&&v.best.deaths>=0)saved.best=v.best;if(v&&v.checkpoint&&Number.isInteger(v.checkpoint.level)&&v.checkpoint.level>=1&&v.checkpoint.level<=saved.unlocked&&Number.isInteger(v.checkpoint.deaths)&&v.checkpoint.deaths>=0&&Number.isFinite(v.checkpoint.elapsed)&&v.checkpoint.elapsed>=0)saved.checkpoint=v.checkpoint}catch(e){}
  let game=Skyward.make(),phase='menu',last=0,acc=0,keys=new Map(),pointers=new Map(),jumpQueued=false,dashQueued=false,announced='',audio=null,muted=false;
- const effects=SkywardFeedback.create(typeof window.matchMedia==='function'&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+ const motionPreference=typeof window.matchMedia==='function'?window.matchMedia('(prefers-reduced-motion: reduce)'):null;
+ const effects=SkywardFeedback.create(!!(motionPreference&&motionPreference.matches));
+ if(motionPreference){
+  const updateMotion=event=>{effects.reduced=event.matches;if(effects.reduced)effects.particles.length=0};
+  if(typeof motionPreference.addEventListener==='function')motionPreference.addEventListener('change',updateMotion);
+  else if(typeof motionPreference.addListener==='function')motionPreference.addListener(updateMotion);
+ }
  function prepareAudio(){if(muted)return;try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;if(!audio)audio=new AC();if(audio.state==='suspended')audio.resume().catch(()=>{})}catch(e){}}
  function sound(kind){if(muted||!audio||audio.state!=='running')return;try{const t=audio.currentTime,o=audio.createOscillator(),vol=audio.createGain(),hz={jump:360,dash:210,light:650,fall:125,gate:520}[kind]||360;o.type=kind==='fall'?'triangle':'sine';o.frequency.setValueAtTime(hz,t);o.frequency.exponentialRampToValueAtTime(kind==='fall'?70:hz*1.4,t+.11);vol.gain.setValueAtTime(.0001,t);vol.gain.exponentialRampToValueAtTime(.07,t+.012);vol.gain.exponentialRampToValueAtTime(.0001,t+.16);o.connect(vol);vol.connect(audio.destination);o.start(t);o.stop(t+.17)}catch(e){}}
  $('sound').addEventListener('click',()=>{muted=!muted;$('sound').textContent=muted?'♪ OFF':'♪ ON';$('sound').setAttribute('aria-pressed',String(muted));$('sound').setAttribute('aria-label',muted?'Unmute sound':'Mute sound');if(!muted)prepareAudio()});
