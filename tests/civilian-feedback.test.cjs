@@ -14,3 +14,20 @@ test('civilian feedback gives the actual current escort blockers without changin
  s.raiders[0].hp=0;c.y=5;u.x=0;u.y=5;assert.match(G.civilianStatus(s,c),/Ready to cross/);
  c.hp=0;assert.match(G.civilianStatus(s,c),/no longer/);
 });
+test('blocked feedback describes current state when an earlier civilian later clears the route',()=>{
+ const s=G.createStage(); s.raiders.forEach(e=>e.hp=0); s.civilians[2].hp=0;
+ const [front,back]=s.civilians; Object.assign(front,{x:2,y:4}); Object.assign(back,{x:2,y:3});
+ Object.assign(s.units[0],{x:1,y:4});Object.assign(s.units[1],{x:1,y:3});Object.assign(s.units[2],{x:5,y:5});
+ const before=JSON.stringify(s);
+ assert.match(G.civilianStatus(s,front),/Ready to follow/);
+ assert.match(G.civilianStatus(s,back),/Route blocked.*Earlier civilian moves may also clear it/);
+ assert.equal(JSON.stringify(s),before,'inspection never changes state');
+ assert.equal(G.endTurn(s),true);assert.equal(front.y,5);assert.equal(back.y,4,'later civilian follows after front moves');
+});
+test('a civilian blocked by a later civilian stays put during the current turn',()=>{
+ const s=G.createStage();s.raiders.forEach(e=>e.hp=0);s.civilians[2].hp=0;
+ const [back,front]=s.civilians;Object.assign(back,{x:2,y:3});Object.assign(front,{x:2,y:4});
+ Object.assign(s.units[0],{x:1,y:4});Object.assign(s.units[1],{x:1,y:3});Object.assign(s.units[2],{x:5,y:5});
+ assert.match(G.civilianStatus(s,back),/Route blocked/);assert.equal(G.endTurn(s),true);
+ assert.equal(back.y,3);assert.equal(front.y,5,'later civilian cannot retroactively move the earlier one');
+});
